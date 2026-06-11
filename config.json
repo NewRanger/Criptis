@@ -4,6 +4,6 @@
   "driftThresholdPct": 5,
   "email": {
     "to": ["ohsomeonesin@gmail.com", "lexoleqso@gmail.com"],
-    "from": "Criptis <onboarding@resend.dev>"
+    "from": "Criptis <alerts@criptis.dev>"
   }
 }
