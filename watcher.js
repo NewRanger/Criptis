@@ -180,22 +180,31 @@ async function sendEmail(subject, body) {
   }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("RESEND_API_KEY not set");
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      from: config.email.from,
-      to: [].concat(config.email.to),
-      subject,
-      text: body,
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(`Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const recipients = [].concat(config.email.to);
+
+  async function send(to) {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ from: config.email.from, to, subject, text: body }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      throw new Error(`Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    }
+  }
+
+  try {
+    await send(recipients);
+  } catch (err) {
+    // Resend's test sender (onboarding@resend.dev) rejects the whole request
+    // if any recipient isn't the account owner — don't lose the alert entirely.
+    if (recipients.length < 2) throw err;
+    console.error(`Send to all recipients failed (${err.message}) — retrying with ${recipients[0]} only`);
+    await send([recipients[0]]);
   }
 }
 
