@@ -188,7 +188,7 @@ async function sendEmail(subject, body) {
     },
     body: JSON.stringify({
       from: config.email.from,
-      to: [config.email.to],
+      to: [].concat(config.email.to),
       subject,
       text: body,
     }),

@@ -58,7 +58,7 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
   "changeThresholdPct": 2,
   "driftThresholdPct": 5,
   "email": {
-    "to": "you@example.com",
+    "to": ["you@example.com", "someone-else@example.com"],
     "from": "Criptis <onboarding@resend.dev>"
   }
 }
