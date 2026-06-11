@@ -1,0 +1,14 @@
+{
+  "name": "criptis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Crypto price watcher on GitHub Actions — deterministic triggers, LLM analysis, email alerts via Resend",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "watch": "node watcher.js",
+    "dry-run": "node watcher.js --dry-run"
+  }
+}

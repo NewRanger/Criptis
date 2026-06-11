@@ -1,0 +1,45 @@
+name: Criptis watch
+
+on:
+  schedule:
+    # Every 2 hours. Off the top of the hour — GitHub delays/skips runs
+    # scheduled at :00 under load.
+    - cron: "13 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never let two runs race on state.json
+concurrency:
+  group: criptis-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run watcher
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: node watcher.js
+
+      - name: Commit updated state
+        run: |
+          git add state.json
+          if git diff --cached --quiet; then
+            echo "state.json unchanged, nothing to commit"
+          else
+            git config user.name "criptis-bot"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: update price state [skip ci]"
+            git push
+          fi
