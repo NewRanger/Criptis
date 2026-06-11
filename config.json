@@ -3,7 +3,7 @@
   "changeThresholdPct": 2,
   "driftThresholdPct": 5,
   "email": {
-    "to": "ohsomeonesin@gmail.com",
+    "to": ["ohsomeonesin@gmail.com", "lexoleqso@gmail.com"],
     "from": "Criptis <onboarding@resend.dev>"
   }
 }
