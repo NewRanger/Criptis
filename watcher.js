@@ -7,6 +7,9 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { fetchSeries } from "./datasource.js";
+import { readout } from "./indicators.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "config.json");
 const STATE_PATH = path.join(__dirname, "state.json");
@@ -54,6 +57,19 @@ const fmtPrice = (n) =>
     ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
     : `$${n.toPrecision(4)}`;
 const fmtTime = (t) => new Date(t).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+
+// One-line summary of an enrichment readout's headline metrics. DESCRIPTIVE only
+// (direction / RSI / %B / momentum / volume) — shared by the plain-text email and
+// the LLM prompt so both are grounded in the same numbers. Skips fields the
+// indicators couldn't compute (short history -> some are null).
+function readoutMetrics(r) {
+  const parts = [`direction ${r.direction}`];
+  if (r.rsi != null) parts.push(`RSI ${r.rsi.toFixed(0)}`);
+  if (r.pctB != null) parts.push(`%B ${Math.round(r.pctB * 100)}%`);
+  if (r.momentumPctPerStep != null) parts.push(`momentum ${fmtPct(r.momentumPctPerStep)}/step`);
+  if (r.volume) parts.push(`volume ${r.volume.rising ? "rising" : "easing"}`);
+  return parts.join(" · ");
+}
 
 // Count the run of consecutive same-direction moves ending at the current price.
 // `len` is the number of moves (so len === 5 means six prices, five steps up/down);
@@ -115,10 +131,20 @@ async function analyze(alerts) {
     .map((a) => {
       const lines = a.history.map((p) => `${fmtTime(p.t)}  ${fmtPrice(p.p)}`).join("\n");
       const drift = a.driftPct === null ? "" : `, ${fmtPct(a.driftPct)} vs ~24h ago`;
+      // Descriptive technical readout from a dense hourly series (null if the
+      // enrichment fetch failed). Ground the paragraph in these numbers; the
+      // system prompt still forbids predictions / buy-sell advice.
+      const indicators = a.readout
+        ? [
+            `indicators (descriptive, from a dense hourly series): ${a.readout.summary}`,
+            `  ${readoutMetrics(a.readout)}${a.readout.r2 != null ? ` · R² ${a.readout.r2.toFixed(2)} (${a.readout.cleanliness})` : ""}`,
+          ].join("\n")
+        : "indicators: unavailable for this coin";
       return [
         `## ${a.coin}`,
         `current: ${fmtPrice(a.price)} (${fmtPct(a.changePct)} since last check${drift})`,
         `triggered by: ${a.reasons.join("; ")}`,
+        indicators,
         `price history, oldest first (~2h between points):`,
         lines,
       ].join("\n");
@@ -175,9 +201,13 @@ function buildBody(alerts, analysis) {
       .slice(-12)
       .map((p) => `  ${fmtTime(p.t)}  ${fmtPrice(p.p)}`)
       .join("\n");
+    const indicators = a.readout
+      ? [`Indicators: ${a.readout.summary}`, `  ${readoutMetrics(a.readout)}`]
+      : [];
     return [
       `${a.coin.toUpperCase()} — ${fmtPrice(a.price)}`,
       `Triggered: ${a.reasons.join("; ")}`,
+      ...indicators,
       `Recent prices:`,
       hist,
     ].join("\n");
@@ -228,6 +258,32 @@ function pill(move, label) {
   return `<span style="display:inline-block;background:${bg};color:#fff;font-weight:600;font-size:12px;padding:2px 8px;border-radius:6px;margin:0 6px 4px 0;">${esc(fmtPct(move))} ${esc(label)}</span>`;
 }
 
+// Descriptive technical readout block for a card. Neutral grey chips (not the
+// green/red move pills) — these characterise the move's shape, they're not gains.
+// Direction and momentum are tinted by sign; the rest stay neutral. Renders
+// nothing when enrichment was unavailable for the coin.
+function readoutHtml(r) {
+  if (!r) return "";
+  const neutral = "#2b3139";
+  const chip = (label, value, bg = neutral, fg = "#d6dae0") =>
+    `<span style="display:inline-block;background:${bg};color:${fg};font-size:11px;padding:2px 8px;border-radius:6px;margin:0 6px 4px 0;"><span style="color:#848e9c;">${esc(label)}</span> ${esc(value)}</span>`;
+  const dirColor = r.direction === "up" ? "#0ecb81" : r.direction === "down" ? "#f6465d" : neutral;
+  const dirFg = r.direction === "flat" ? "#d6dae0" : "#fff";
+  const chips = [chip("direction", r.direction, dirColor, dirFg)];
+  if (r.rsi != null) chips.push(chip("RSI", r.rsi.toFixed(0)));
+  if (r.pctB != null) chips.push(chip("%B", `${Math.round(r.pctB * 100)}%`));
+  if (r.momentumPctPerStep != null) {
+    const mBg = r.momentumPctPerStep >= 0 ? "#0ecb81" : "#f6465d";
+    chips.push(chip("momentum", `${fmtPct(r.momentumPctPerStep)}/step`, mBg, "#fff"));
+  }
+  if (r.volume) chips.push(chip("volume", r.volume.rising ? "rising" : "easing"));
+  return `
+        <div style="border-top:1px solid #2b3139;margin:0 0 14px;padding-top:12px;">
+          <div style="color:#848e9c;font-size:12px;line-height:1.5;margin-bottom:8px;"><span style="color:#eaecef;font-weight:600;">Indicators</span> · ${esc(r.summary)}</div>
+          <div>${chips.join("")}</div>
+        </div>`;
+}
+
 // HTML twin of buildBody — a Binance-style dark card per coin with an embedded
 // chart. Always sent alongside the plain-text body, which remains the fallback
 // for clients that block HTML or images.
@@ -242,6 +298,7 @@ function buildHtml(alerts, analysis) {
         <div style="color:#fff;font-size:30px;font-weight:700;margin:4px 0 10px;">${esc(fmtPrice(a.price))}</div>
         <div style="margin-bottom:12px;">${pills.join("")}</div>
         <div style="color:#b7bdc6;font-size:13px;line-height:1.5;margin-bottom:14px;">${esc(a.reasons.join("; "))}</div>
+        ${readoutHtml(a.readout)}
         <img src="${chartUrl(a)}" alt="${esc(a.coin)} price chart" style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;" />
       </div>`;
   });
@@ -371,6 +428,21 @@ async function main() {
   if (alerts.length === 0) {
     console.log("No triggers — state updated, nothing to send.");
     return;
+  }
+
+  // Enrichment layer: for alerting coins only, pull a dense hourly series and
+  // fold it into a descriptive technical readout for the email + the LLM. This
+  // runs AFTER the early exit so the no-trigger path stays fetch-free. It must
+  // never block an alert: a failed fetch degrades to no readout (like analyze()).
+  for (const a of alerts) {
+    try {
+      const series = await fetchSeries(a.coin, { days: 1 });
+      a.readout = readout(series);
+      console.log(`${a.coin}: readout — ${a.readout.summary}`);
+    } catch (err) {
+      a.readout = null;
+      console.error(`Enrichment for ${a.coin} failed — sending alert without readout: ${err.message}`);
+    }
   }
 
   const analysis = await analyze(alerts);
