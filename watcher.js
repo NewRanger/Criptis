@@ -18,6 +18,7 @@ const PROMPT_PATH = path.join(__dirname, "prompts", "analysis.md");
 const HISTORY_LIMIT = 24; // price points kept per coin (~48h at a 2h cadence)
 const HOUR = 3_600_000;
 const DRIFT_MIN_AGE_HOURS = 18; // youngest point allowed as the "~24h ago" reference
+const DRIFT_REARM = 0.8; // drift-latch hysteresis: re-arm once |drift| eases below threshold*this (1.0 = none)
 
 // --- CLI flags ---------------------------------------------------------------
 
@@ -89,7 +90,40 @@ function trendStreak(history, price) {
   return { len, dir, netPct: pct(seq[seq.length - 1 - len], price) };
 }
 
+// Edge-trigger decision for the drift signal. drift compares vs a ~24h-ago
+// reference, so a move that crosses the threshold and HOLDS would otherwise
+// re-fire every run for ~24h (unlike rate-based change or fire-once streak).
+// `dir` is the over-threshold sign (0 while within threshold); it fires only when
+// that sign differs from the latched `prevDir` — so a sustained move alerts once
+// and a genuine reversal (sign flip) re-fires. The latch holds through a
+// hysteresis band and re-arms (nextDir 0) only once |drift| eases below
+// threshold*reArm. Pure — no I/O, no state — so the rule is unit-testable.
+export function driftDecision(driftPct, threshold, prevDir, reArm) {
+  const dir = Math.abs(driftPct) > threshold ? Math.sign(driftPct) : 0;
+  const fire = dir !== 0 && dir !== prevDir;
+  let nextDir;
+  if (dir !== 0) nextDir = dir;                                  // over threshold — latch this direction
+  else if (Math.abs(driftPct) < threshold * reArm) nextDir = 0;  // eased below the re-arm band — re-arm
+  else nextDir = prevDir;                                        // inside the hysteresis band — stay latched
+  return { fire, nextDir };
+}
+
 // --- Prices (CoinGecko, retry once then exit 1) -------------------------------
+
+// Validate a CoinGecko simple/price body into { prices, skipped }. A price counts
+// only if it's a finite, positive number; a missing coin, a 429/error body, or a
+// malformed entry yields no price for that id (it lands in `skipped`) rather than an
+// undefined that would become NaN downstream and poison the rolling history. Pure.
+export function parsePrices(data, ids) {
+  const prices = {};
+  const skipped = [];
+  for (const id of ids) {
+    const usd = data?.[id]?.usd;
+    if (Number.isFinite(usd) && usd > 0) prices[id] = usd;
+    else skipped.push(id);
+  }
+  return { prices, skipped };
+}
 
 async function fetchPrices(ids) {
   if (mockPrice !== null) {
@@ -104,11 +138,15 @@ async function fetchPrices(ids) {
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const prices = {};
-      for (const id of ids) {
-        const usd = data[id]?.usd;
-        if (typeof usd !== "number") throw new Error(`no USD price for "${id}" in response`);
-        prices[id] = usd;
+      const { prices, skipped } = parsePrices(data, ids);
+      // Total failure (nothing valid — e.g. a 429/error body) drops into the
+      // retry/exit path below. A partial failure keeps the valid coins and skips
+      // the rest, logging which so a missing coin is visible, not silent.
+      if (Object.keys(prices).length === 0) {
+        throw new Error(`no valid prices in response (checked ${ids.length} coin(s))`);
+      }
+      if (skipped.length) {
+        console.warn(`Skipping coins with no valid price this run: ${skipped.join(", ")}`);
       }
       return prices;
     } catch (err) {
@@ -371,6 +409,13 @@ async function main() {
 
   for (const coin of coins) {
     const price = prices[coin];
+    // BUG-1: a coin with no valid price this run is skipped entirely — no signal
+    // math and, crucially, no history append (a missing price must never be stored
+    // nor treated as a 0% move). fetchPrices already warned which coins were skipped.
+    if (price === undefined) {
+      console.log(`${coin}: no valid price this run — skipped`);
+      continue;
+    }
     const entry = state.coins[coin] ?? { history: [] };
     const history = entry.history;
 
@@ -391,9 +436,21 @@ async function main() {
     if (changePct !== null && Math.abs(changePct) > changeThresholdPct) {
       reasons.push(`${fmtPct(changePct)} since last check (threshold ${changeThresholdPct}%)`);
     }
-    if (driftPct !== null && Math.abs(driftPct) > driftThresholdPct) {
-      reasons.push(`${fmtPct(driftPct)} drift vs ~24h ago (threshold ${driftThresholdPct}%)`);
+    // BUG-2: drift is edge-triggered via a per-coin latch so a sustained move
+    // alerts once instead of every run for ~24h. Read the latch defensively (older
+    // state.json lacks the field) and update it EVERY run for this valid-price coin
+    // so it can re-arm when the move eases. A null driftPct (no ~24h reference yet)
+    // means no episode → latch stays disarmed at 0.
+    const prevDriftDir = entry.lastDriftDir ?? 0;
+    let driftDir = 0;
+    if (driftPct !== null) {
+      const decision = driftDecision(driftPct, driftThresholdPct, prevDriftDir, DRIFT_REARM);
+      driftDir = decision.nextDir;
+      if (decision.fire) {
+        reasons.push(`${fmtPct(driftPct)} drift vs ~24h ago (threshold ${driftThresholdPct}%)`);
+      }
     }
+    entry.lastDriftDir = driftDir;
 
     // Trend streak: N checks in a row moving the same way. Catches a slow, steady
     // grind where each ~2h step stays under changeThresholdPct yet never reverses.
@@ -453,7 +510,11 @@ async function main() {
   console.log(`Alert ${dryRun ? "printed" : "emailed"} for: ${alerts.map((a) => a.coin).join(", ")}`);
 }
 
-main().catch((err) => {
-  console.error(`Fatal: ${err.message}`);
-  process.exit(1);
-});
+// Run only when invoked directly (node watcher.js) so a test file can import the
+// pure helpers above without kicking off a real fetch/email run.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`Fatal: ${err.message}`);
+    process.exit(1);
+  });
+}
