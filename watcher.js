@@ -13,6 +13,7 @@ import { readout } from "./indicators.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "config.json");
 const STATE_PATH = path.join(__dirname, "state.json");
+const DATA_PATH = path.join(__dirname, "public", "data.json");
 const PROMPT_PATH = path.join(__dirname, "prompts", "analysis.md");
 
 const HISTORY_LIMIT = 24; // price points kept per coin (~48h at a 2h cadence)
@@ -484,24 +485,54 @@ async function main() {
     fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
   }
 
-  if (alerts.length === 0) {
-    console.log("No triggers — state updated, nothing to send.");
-    return;
+  // Enrichment layer: pull a dense hourly series for EVERY coin with a valid
+  // price this run and fold it into a descriptive technical readout. ONE fetch
+  // per coin — the email (alerting coins) and public/data.json (all coins) share
+  // the SAME readout, so no coin's series is fetched twice. This now runs BEFORE
+  // the no-trigger early return so the dashboard refreshes every run; it must
+  // never block an alert, so a failed fetch degrades that coin to a null readout
+  // (exactly as the email did before).
+  const enrichment = {};
+  for (const coin of coins) {
+    if (prices[coin] === undefined) continue; // no spot price this run — not published
+    try {
+      const series = await fetchSeries(coin, { days: 1, demoKey: process.env.COINGECKO_API_KEY });
+      enrichment[coin] = { readout: readout(series), series };
+      console.log(`${coin}: readout — ${enrichment[coin].readout.summary}`);
+    } catch (err) {
+      enrichment[coin] = { readout: null, series: null };
+      console.error(`Enrichment for ${coin} failed — null readout: ${err.message}`);
+    }
   }
 
-  // Enrichment layer: for alerting coins only, pull a dense hourly series and
-  // fold it into a descriptive technical readout for the email + the LLM. This
-  // runs AFTER the early exit so the no-trigger path stays fetch-free. It must
-  // never block an alert: a failed fetch degrades to no readout (like analyze()).
-  for (const a of alerts) {
-    try {
-      const series = await fetchSeries(a.coin, { days: 1, demoKey: process.env.COINGECKO_API_KEY });
-      a.readout = readout(series);
-      console.log(`${a.coin}: readout — ${a.readout.summary}`);
-    } catch (err) {
-      a.readout = null;
-      console.error(`Enrichment for ${a.coin} failed — sending alert without readout: ${err.message}`);
-    }
+  // Publish the dashboard feed every run (even with no alert): the spot price
+  // used for the triggers, the shared readout (or null), and the dense series as
+  // {t,p,v} (v null where CoinGecko gave no volume; [] when the fetch failed).
+  // Written here, before the early return below — Claude and Resend stay gated on
+  // a trigger. Unlike state.json (mutable history, skipped on dry runs) this is a
+  // stateless projection of the current run, so it is always (re)written.
+  const data = { updatedAt: state.updatedAt, coins: {} };
+  for (const coin of coins) {
+    if (prices[coin] === undefined) continue;
+    const { readout: r = null, series = null } = enrichment[coin] ?? {};
+    data.coins[coin] = {
+      price: prices[coin],
+      readout: r,
+      series: series
+        ? series.times.map((t, i) => ({ t, p: series.closes[i], v: series.volumes[i] ?? null }))
+        : [],
+    };
+  }
+  fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
+  fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2) + "\n");
+  console.log(`Wrote ${path.relative(__dirname, DATA_PATH)} (${Object.keys(data.coins).length} coin(s))`);
+
+  // Reuse the shared readouts for the alert email + LLM — no second fetch.
+  for (const a of alerts) a.readout = enrichment[a.coin]?.readout ?? null;
+
+  if (alerts.length === 0) {
+    console.log("No triggers — state + data updated, nothing to send.");
+    return;
   }
 
   const analysis = await analyze(alerts);

@@ -35,9 +35,9 @@ jobs:
 
       - name: Commit updated state
         run: |
-          git add state.json
+          git add state.json public/data.json
           if git diff --cached --quiet; then
-            echo "state.json unchanged, nothing to commit"
+            echo "state.json/public/data.json unchanged, nothing to commit"
           else
             git config user.name "criptis-bot"
             git config user.email "github-actions[bot]@users.noreply.github.com"
