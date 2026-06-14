@@ -18,6 +18,7 @@ GitHub Actions (cron */2h)
        ├─ on trigger: Anthropic claude-sonnet-4-6 writes one paragraph
        │    (30s timeout — a failed call never blocks the email)
        ├─ one combined email via Resend if multiple coins trigger
+       │    (HTML card per coin + QuickChart sparkline; plain-text fallback)
        └─ always write state.json → workflow commits it back [skip ci]
 ```
 
@@ -83,7 +84,7 @@ node watcher.js --dry-run --mock-price 1 # huge "drop" → trigger fires, email 
 git checkout state.json                  # discard the locally seeded state
 ```
 
-`--dry-run` skips both the Resend send and the `state.json` write. The Anthropic call still happens if `ANTHROPIC_API_KEY` is set in your environment, so you can preview the analysis.
+`--dry-run` skips both the Resend send and the `state.json` write. The Anthropic call still happens if `ANTHROPIC_API_KEY` is set in your environment, so you can preview the analysis. It also writes the rendered HTML email to `email-preview.html` (gitignored) — open it in a browser to see the card and chart exactly as they'll send.
 
 ## Files
 

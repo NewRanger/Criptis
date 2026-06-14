@@ -188,12 +188,87 @@ function buildBody(alerts, analysis) {
   return `${sections.join("\n\n")}\n\n${tail}\n\n— Criptis`;
 }
 
-async function sendEmail(subject, body) {
+const esc = (s) =>
+  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// QuickChart line-chart image of the stored price history. Decorative only — if
+// QuickChart is unreachable the <img> just doesn't render and the card's numbers
+// still carry the alert. Criptis stores one close per ~2h, so this is a sparkline,
+// not candlesticks. Green when the window is net-up, Binance-red when net-down.
+function chartUrl(a) {
+  const pts = a.history;
+  const up = pts.length < 2 || pts.at(-1).p >= pts[0].p;
+  const config = {
+    type: "line",
+    data: {
+      labels: pts.map(() => ""),
+      datasets: [{
+        data: pts.map((p) => p.p),
+        borderColor: up ? "#0ecb81" : "#f6465d",
+        backgroundColor: up ? "rgba(14,203,129,0.15)" : "rgba(246,70,93,0.15)",
+        fill: true,
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.35,
+      }],
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { position: "right", grid: { color: "rgba(255,255,255,0.06)" }, ticks: { color: "#848e9c" } },
+      },
+    },
+  };
+  return `https://quickchart.io/chart?bkg=%231e2329&w=600&h=240&c=${encodeURIComponent(JSON.stringify(config))}`;
+}
+
+function pill(move, label) {
+  const bg = move >= 0 ? "#0ecb81" : "#f6465d";
+  return `<span style="display:inline-block;background:${bg};color:#fff;font-weight:600;font-size:12px;padding:2px 8px;border-radius:6px;margin:0 6px 4px 0;">${esc(fmtPct(move))} ${esc(label)}</span>`;
+}
+
+// HTML twin of buildBody — a Binance-style dark card per coin with an embedded
+// chart. Always sent alongside the plain-text body, which remains the fallback
+// for clients that block HTML or images.
+function buildHtml(alerts, analysis) {
+  const cards = alerts.map((a) => {
+    const pills = [pill(a.changePct, "2h")];
+    if (a.driftPct !== null) pills.push(pill(a.driftPct, "24h"));
+    if (a.streak) pills.push(pill(a.streak.netPct, `${a.streak.len}-check`));
+    return `
+      <div style="background:#1e2329;border-radius:12px;padding:18px 20px;margin:0 0 16px;">
+        <div style="color:#eaecef;font-size:15px;font-weight:700;letter-spacing:.5px;">${esc(a.coin.toUpperCase())}</div>
+        <div style="color:#fff;font-size:30px;font-weight:700;margin:4px 0 10px;">${esc(fmtPrice(a.price))}</div>
+        <div style="margin-bottom:12px;">${pills.join("")}</div>
+        <div style="color:#b7bdc6;font-size:13px;line-height:1.5;margin-bottom:14px;">${esc(a.reasons.join("; "))}</div>
+        <img src="${chartUrl(a)}" alt="${esc(a.coin)} price chart" style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;" />
+      </div>`;
+  });
+  const analysisHtml = analysis
+    ? `<div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;color:#d6dae0;font-size:14px;line-height:1.6;">${esc(analysis).replace(/\n/g, "<br>")}</div>`
+    : `<div style="color:#848e9c;font-size:13px;">Analysis unavailable — raw numbers above.</div>`;
+  return `<!doctype html><html><body style="margin:0;padding:20px;background:#181a20;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:600px;margin:0 auto;">
+      <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">⚡ Criptis alert</div>
+      ${cards.join("")}
+      ${analysisHtml}
+      <div style="color:#5e6673;font-size:11px;margin-top:16px;">Criptis · automated price watcher · not financial advice</div>
+    </div>
+  </body></html>`;
+}
+
+async function sendEmail(subject, text, html) {
   if (dryRun) {
     console.log("\n--- DRY RUN: email not sent ---");
     console.log(`To:      ${config.email.to}`);
     console.log(`Subject: ${subject}`);
-    console.log(body);
+    console.log(text);
+    if (html) {
+      const previewPath = path.join(__dirname, "email-preview.html");
+      fs.writeFileSync(previewPath, html);
+      console.log(`\nHTML preview written to ${previewPath} — open it in a browser`);
+    }
     console.log("--- END DRY RUN ---\n");
     return;
   }
@@ -208,7 +283,7 @@ async function sendEmail(subject, body) {
         Authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ from: config.email.from, to, subject, text: body }),
+      body: JSON.stringify({ from: config.email.from, to, subject, text, html }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
@@ -300,7 +375,7 @@ async function main() {
 
   const analysis = await analyze(alerts);
   const subject = alerts.map(headline).join(" · ");
-  await sendEmail(subject, buildBody(alerts, analysis));
+  await sendEmail(subject, buildBody(alerts, analysis), buildHtml(alerts, analysis));
   console.log(`Alert ${dryRun ? "printed" : "emailed"} for: ${alerts.map((a) => a.coin).join(", ")}`);
 }
 
