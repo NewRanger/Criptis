@@ -2,6 +2,7 @@
   "coins": ["bitcoin", "ethereum", "solana", "ripple", "dogecoin"],
   "changeThresholdPct": 0.9,
   "driftThresholdPct": 4,
+  "streakLength": 5,
   "email": {
     "to": ["ohsomeonesin@gmail.com", "lexoleqso@gmail.com"],
     "from": "Criptis <alerts@criptis.dev>"

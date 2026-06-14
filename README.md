@@ -14,6 +14,7 @@ GitHub Actions (cron */2h)
        ├─ trigger if:
        │    • change since last check  > 1.5%  (changeThresholdPct)
        │    • drift vs ~24h ago        > 4%   (driftThresholdPct, slow-bleed)
+       │    • N checks in a row one way  = 5   (streakLength, steady trend)
        ├─ on trigger: Anthropic claude-sonnet-4-6 writes one paragraph
        │    (30s timeout — a failed call never blocks the email)
        ├─ one combined email via Resend if multiple coins trigger
@@ -57,6 +58,7 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
   "coins": ["bitcoin"],
   "changeThresholdPct": 1.5,
   "driftThresholdPct": 4,
+  "streakLength": 5,
   "email": {
     "to": ["you@example.com", "someone-else@example.com"],
     "from": "Criptis <onboarding@resend.dev>"
@@ -67,6 +69,7 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
 - **coins** — CoinGecko ids (`bitcoin`, `ethereum`, `solana`, …). Find ids at coingecko.com on the coin page ("API ID").
 - **changeThresholdPct** — alert when the move since the last check (~2h) exceeds this. Lower = noisier.
 - **driftThresholdPct** — alert when the price has drifted this far from ~24h ago, even if each 2h step was small. Catches slow bleeds.
+- **streakLength** — alert when this many checks in a row (~2h each) move the same direction, even if no single step or the 24h drift crossed a threshold. Catches a steady grind. Fires once when the streak forms, then stays quiet until it breaks. Default 5 (~10h); set higher to require a longer trend.
 
 ## Local testing
 

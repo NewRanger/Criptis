@@ -33,6 +33,7 @@ const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
 const coins = config.coins ?? ["bitcoin"];
 const changeThresholdPct = config.changeThresholdPct ?? 2;
 const driftThresholdPct = config.driftThresholdPct ?? 5;
+const streakLength = config.streakLength ?? 5; // consecutive same-direction checks that flag a trend
 
 function loadState() {
   try {
@@ -53,6 +54,23 @@ const fmtPrice = (n) =>
     ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
     : `$${n.toPrecision(4)}`;
 const fmtTime = (t) => new Date(t).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+
+// Count the run of consecutive same-direction moves ending at the current price.
+// `len` is the number of moves (so len === 5 means six prices, five steps up/down);
+// `dir` is +1 / -1 / 0 (0 = flat or not enough data); `netPct` is the move across
+// the whole run. A flat or zig-zag market alternates sign and never builds a run.
+function trendStreak(history, price) {
+  const seq = [...history.map((p) => p.p), price];
+  if (seq.length < 2) return { len: 0, dir: 0, netPct: 0 };
+  const dir = Math.sign(seq.at(-1) - seq.at(-2));
+  if (dir === 0) return { len: 0, dir: 0, netPct: 0 };
+  let len = 1;
+  for (let i = seq.length - 2; i > 0; i--) {
+    if (Math.sign(seq[i] - seq[i - 1]) !== dir) break;
+    len++;
+  }
+  return { len, dir, netPct: pct(seq[seq.length - 1 - len], price) };
+}
 
 // --- Prices (CoinGecko, retry once then exit 1) -------------------------------
 
@@ -142,12 +160,13 @@ async function analyze(alerts) {
 // --- Notification (Resend) -----------------------------------------------------
 
 function headline(a) {
-  // Lead with whichever move actually matters: a slow 24h bleed can trigger
-  // while the 2h change is near zero.
-  const useDrift = a.driftPct !== null && Math.abs(a.driftPct) > Math.abs(a.changePct);
-  const move = useDrift ? a.driftPct : a.changePct;
-  const window = useDrift ? "24h" : "2h";
-  return `${move >= 0 ? "\u{1F4C8}" : "\u{1F4C9}"} ${a.coin} ${fmtPrice(a.price)} (${fmtPct(move)} ${window})`;
+  // Lead with whichever signal is largest in magnitude: a slow 24h bleed or a
+  // multi-check trend can matter more than the latest 2h tick (which may be ~0).
+  const candidates = [{ move: a.changePct, window: "2h" }];
+  if (a.driftPct !== null) candidates.push({ move: a.driftPct, window: "24h" });
+  if (a.streak) candidates.push({ move: a.streak.netPct, window: `${a.streak.len}-check trend` });
+  const top = candidates.reduce((b, c) => (Math.abs(c.move) > Math.abs(b.move) ? c : b));
+  return `${top.move >= 0 ? "\u{1F4C8}" : "\u{1F4C9}"} ${a.coin} ${fmtPrice(a.price)} (${fmtPct(top.move)} ${top.window})`;
 }
 
 function buildBody(alerts, analysis) {
@@ -242,12 +261,26 @@ async function main() {
       reasons.push(`${fmtPct(driftPct)} drift vs ~24h ago (threshold ${driftThresholdPct}%)`);
     }
 
+    // Trend streak: N checks in a row moving the same way. Catches a slow, steady
+    // grind where each ~2h step stays under changeThresholdPct yet never reverses.
+    // Fires once — the moment the run reaches streakLength — so a long trend isn't
+    // re-alerted every check (next check len is N+1, not N, so it stays quiet).
+    let streakInfo = null;
+    const streak = trendStreak(history, price);
+    if (streakLength >= 2 && streak.len === streakLength) {
+      const startT = history[history.length - streak.len].t;
+      const windowH = Math.round((now - startT) / HOUR);
+      const dirWord = streak.dir > 0 ? "up" : "down";
+      reasons.push(`${streakLength} checks in a row ${dirWord} (${fmtPct(streak.netPct)} over ~${windowH}h)`);
+      streakInfo = streak;
+    }
+
     history.push({ t: now, p: price });
     if (history.length > HISTORY_LIMIT) history.splice(0, history.length - HISTORY_LIMIT);
     state.coins[coin] = entry;
 
     if (reasons.length) {
-      alerts.push({ coin, price, changePct: changePct ?? 0, driftPct, reasons, history: [...history] });
+      alerts.push({ coin, price, changePct: changePct ?? 0, driftPct, streak: streakInfo, reasons, history: [...history] });
     }
     const tag = changePct === null ? " (first data point)" : ` (${fmtPct(changePct)})`;
     console.log(`${coin}: ${fmtPrice(price)}${tag}${reasons.length ? "  >> TRIGGER" : ""}`);
