@@ -66,7 +66,8 @@ function readoutMetrics(r) {
   const parts = [`direction ${r.direction}`];
   if (r.rsi != null) parts.push(`RSI ${r.rsi.toFixed(0)}`);
   if (r.pctB != null) parts.push(`%B ${Math.round(r.pctB * 100)}%`);
-  if (r.momentumPctPerStep != null) parts.push(`momentum ${fmtPct(r.momentumPctPerStep)}/step`);
+  // "/hr" label is accurate because the enrichment series is hourly (fetchSeries days:1).
+  if (r.momentumPctPerStep != null) parts.push(`momentum ${fmtPct(r.momentumPctPerStep)}/hr`);
   if (r.volume) parts.push(`volume ${r.volume.rising ? "rising" : "easing"}`);
   return parts.join(" · ");
 }
@@ -274,7 +275,8 @@ function readoutHtml(r) {
   if (r.pctB != null) chips.push(chip("%B", `${Math.round(r.pctB * 100)}%`));
   if (r.momentumPctPerStep != null) {
     const mBg = r.momentumPctPerStep >= 0 ? "#0ecb81" : "#f6465d";
-    chips.push(chip("momentum", `${fmtPct(r.momentumPctPerStep)}/step`, mBg, "#fff"));
+    // "/hr" label is accurate because the enrichment series is hourly (fetchSeries days:1).
+    chips.push(chip("momentum", `${fmtPct(r.momentumPctPerStep)}/hr`, mBg, "#fff"));
   }
   if (r.volume) chips.push(chip("volume", r.volume.rising ? "rising" : "easing"));
   return `
@@ -436,7 +438,7 @@ async function main() {
   // never block an alert: a failed fetch degrades to no readout (like analyze()).
   for (const a of alerts) {
     try {
-      const series = await fetchSeries(a.coin, { days: 1 });
+      const series = await fetchSeries(a.coin, { days: 1, demoKey: process.env.COINGECKO_API_KEY });
       a.readout = readout(series);
       console.log(`${a.coin}: readout — ${a.readout.summary}`);
     } catch (err) {
