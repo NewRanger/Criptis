@@ -12,8 +12,8 @@ GitHub Actions (cron */2h)
        ├─ fetch prices (CoinGecko, free, no key; retry once → exit 1)
        ├─ load state.json, keep last 24 price points per coin (~48h)
        ├─ trigger if:
-       │    • change since last check  > 2%   (changeThresholdPct)
-       │    • drift vs ~24h ago        > 5%   (driftThresholdPct, slow-bleed)
+       │    • change since last check  > 1.5%  (changeThresholdPct)
+       │    • drift vs ~24h ago        > 4%   (driftThresholdPct, slow-bleed)
        ├─ on trigger: Anthropic claude-sonnet-4-6 writes one paragraph
        │    (30s timeout — a failed call never blocks the email)
        ├─ one combined email via Resend if multiple coins trigger
@@ -55,8 +55,8 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
 ```json
 {
   "coins": ["bitcoin"],
-  "changeThresholdPct": 2,
-  "driftThresholdPct": 5,
+  "changeThresholdPct": 1.5,
+  "driftThresholdPct": 4,
   "email": {
     "to": ["you@example.com", "someone-else@example.com"],
     "from": "Criptis <onboarding@resend.dev>"
