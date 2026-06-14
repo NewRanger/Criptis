@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Criptis</title>
+<meta name="theme-color" content="#0c0e12" />
+<meta name="description" content="A quiet instrument panel reading the market — descriptive, not advisory." />
+<link rel="manifest" href="./manifest.json" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<style>
+  /* ---- tokens ------------------------------------------------------------ */
+  :root{
+    --bg:#0c0e12;          /* deep warm-slate, not pure black */
+    --surface:#14171d;     /* card */
+    --surface-2:#1b1f27;   /* inner panels / chips */
+    --line:#252a33;        /* hairlines */
+    --text:#e7e3da;        /* warm off-white (forged, not stark) */
+    --dim:#868d97;         /* secondary */
+    --faint:#5b626c;       /* tertiary / disabled */
+    --amber:#f3a13c;       /* the signature — heat */
+    --amber-soft:rgba(243,161,60,.14);
+    --up:#2ebd85;          /* gains, softened */
+    --down:#e25c5c;        /* losses, softened */
+    --up-soft:rgba(46,189,133,.12);
+    --down-soft:rgba(226,92,79,.12);
+    --mono:ui-monospace,"SF Mono","Cascadia Code","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.45;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:18px 16px 56px}
+
+  /* ---- header ------------------------------------------------------------ */
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:12px;padding:6px 2px 18px;
+  }
+  .brand{
+    font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+    font-size:15px;color:var(--text);
+  }
+  .brand b{color:var(--amber);font-weight:700}
+  .status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);font-family:var(--mono)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+  .status.fresh .dot{background:var(--amber);box-shadow:0 0 0 0 var(--amber-soft);animation:pulse 2.4s ease-out infinite}
+  .status.stale{color:var(--down)}
+  .status.stale .dot{background:var(--down)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(243,161,60,.45)}70%{box-shadow:0 0 0 7px rgba(243,161,60,0)}100%{box-shadow:0 0 0 0 rgba(243,161,60,0)}}
+  @media (prefers-reduced-motion:reduce){.status.fresh .dot{animation:none}}
+
+  /* ---- card -------------------------------------------------------------- */
+  .grid{display:grid;gap:12px}
+  @media(min-width:620px){.grid{grid-template-columns:1fr 1fr}}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:15px 15px 13px;display:flex;flex-direction:column;gap:11px;
+  }
+  .card .head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .sym{font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:.02em;line-height:1}
+  .name{font-size:11.5px;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
+  .price{font-family:var(--mono);font-size:20px;font-weight:600;text-align:right;line-height:1;font-variant-numeric:tabular-nums}
+  .price .cur{color:var(--faint);font-size:12px;margin-right:1px}
+
+  /* the read — the hero of the card */
+  .read{font-size:13.5px;color:var(--text);min-height:1px}
+  .read .lead{font-weight:600}
+  .read.up .lead{color:var(--up)} .read.down .lead{color:var(--down)} .read.flat .lead{color:var(--dim)}
+
+  /* chart */
+  .chart{width:100%;height:62px;display:block;overflow:visible}
+  .chart .area{opacity:.13}
+  .chart .line{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke}
+  .chart .pt{stroke:var(--bg);stroke-width:1.5}
+  .chart.up .line,.chart.up .pt{stroke:var(--up)} .chart.up .area{fill:var(--up)}
+  .chart.down .line,.chart.down .pt{stroke:var(--down)} .chart.down .area{fill:var(--down)}
+  .chart.flat .line,.chart.flat .pt{stroke:var(--dim)} .chart.flat .area{fill:var(--dim)}
+  .chart.up .pt,.chart.down .pt,.chart.flat .pt{fill:currentColor}
+
+  /* readings */
+  .reads{display:flex;flex-wrap:wrap;gap:7px 6px;align-items:center}
+  .chip{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:7px;
+    padding:5px 8px;display:flex;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:11.5px;line-height:1;
+  }
+  .chip .k{color:var(--faint);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+  .chip .v{color:var(--text);font-variant-numeric:tabular-nums}
+  .chip.pos .v{color:var(--up)} .chip.neg .v{color:var(--down)}
+  /* rsi gauge */
+  .rsi{gap:7px}
+  .gauge{position:relative;width:52px;height:5px;border-radius:3px;background:var(--bg);overflow:hidden;flex:none}
+  .gauge .z{position:absolute;top:0;bottom:0}
+  .gauge .lo{left:0;width:30%;background:var(--up-soft)}
+  .gauge .hi{right:0;width:30%;background:var(--down-soft)}
+  .gauge .mk{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--text);border-radius:2px}
+
+  .unavail{font-size:12.5px;color:var(--dim);font-style:normal;padding:2px 0}
+
+  /* ---- empty / footer ---------------------------------------------------- */
+  .empty{
+    text-align:center;color:var(--dim);padding:64px 18px;border:1px dashed var(--line);
+    border-radius:14px;font-size:14px;
+  }
+  .empty .big{color:var(--text);font-size:16px;margin-bottom:6px;font-weight:600}
+  footer.foot{margin-top:26px;text-align:center;color:var(--faint);font-size:11px;font-family:var(--mono);letter-spacing:.04em}
+  footer.foot a{color:var(--dim);text-decoration:none}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">Crip<b>tis</b></div>
+      <div class="status" id="status" aria-live="polite"><span class="dot"></span><span id="statusText">loading…</span></div>
+    </header>
+    <main id="grid" class="grid" aria-live="polite"></main>
+    <footer class="foot">Descriptive readout — not financial advice. <span id="src"></span></footer>
+  </div>
+
+<script type="module">
+// ----- config ------------------------------------------------------------
+// Where the cron publishes data. Default assumes GitHub Pages served from the
+// repo root, with the file at public/data.json. If you serve a different folder,
+// change this to e.g. "./data.json".
+const DATA_URL = "./public/data.json";
+const REFRESH_MS = 60_000;     // re-poll an open tab every minute
+const STALE_MS = 2.5 * 3600_000; // older than ~2.5h (> one 2h cycle) reads as stale
+
+// id -> display, with a graceful fallback for anything not listed
+const COINS = {
+  bitcoin:{sym:"BTC",name:"Bitcoin"}, ethereum:{sym:"ETH",name:"Ethereum"},
+  solana:{sym:"SOL",name:"Solana"},   ripple:{sym:"XRP",name:"XRP"},
+  dogecoin:{sym:"DOGE",name:"Dogecoin"},
+};
+const label = id => COINS[id] || {sym:id.slice(0,5).toUpperCase(), name:id};
+
+// ----- pure helpers (unit-tested separately) -----------------------------
+export function fmtPrice(n){
+  if(typeof n!=="number"||!isFinite(n)) return "—";
+  if(n>=1000) return n.toLocaleString("en-US",{maximumFractionDigits:2});
+  if(n>=1)    return n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:4});
+  return n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});
+}
+export function relTime(iso, now=Date.now()){
+  const t=Date.parse(iso); if(isNaN(t)) return "unknown";
+  const m=Math.max(0,Math.round((now-t)/60000));
+  if(m<1) return "just now";
+  if(m<60) return m+"m ago";
+  const h=Math.floor(m/60), mm=m%60;
+  return mm ? `${h}h ${mm}m ago` : `${h}h ago`;
+}
+// build an SVG line + area path for a series of {p} values in a w×h box
+export function chartPaths(values, w, h, pad=4){
+  const v=values.filter(x=>typeof x==="number"&&isFinite(x));
+  if(v.length<2) return null;
+  let lo=Math.min(...v), hi=Math.max(...v); if(lo===hi){lo-=1;hi+=1;}
+  const x=i=> v.length<2?pad : pad + i*(w-2*pad)/(v.length-1);
+  const y=p=> pad + (hi-p)*(h-2*pad)/(hi-lo);
+  const pts=v.map((p,i)=>[x(i),y(p)]);
+  const line="M"+pts.map(p=>p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" L ");
+  const area=line+` L ${pts[pts.length-1][0].toFixed(1)} ${h} L ${pts[0][0].toFixed(1)} ${h} Z`;
+  const last=pts[pts.length-1];
+  return {line, area, last};
+}
+
+// ----- rendering ---------------------------------------------------------
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const dirOf = r => (r&&r.direction)||"flat";
+
+function chartSVG(series, dir){
+  const paths = chartPaths((series||[]).map(p=>p&&p.p), 300, 62);
+  if(!paths) return "";
+  return `<svg class="chart ${dir}" viewBox="0 0 300 62" preserveAspectRatio="none" aria-hidden="true">
+    <path class="area" d="${paths.area}"></path>
+    <path class="line" d="${paths.line}"></path>
+    <circle class="pt" cx="${paths.last[0].toFixed(1)}" cy="${paths.last[1].toFixed(1)}" r="2.6"></circle>
+  </svg>`;
+}
+
+function reads(r){
+  if(!r) return "";
+  const out=[];
+  // trend
+  const arrow = r.direction==="up"?"↑":r.direction==="down"?"↓":"→";
+  const trendCls = r.direction==="up"?"pos":r.direction==="down"?"neg":"";
+  const trendWord = r.direction==="flat"?"flat":(r.direction+", "+(r.cleanliness||""));
+  out.push(`<span class="chip ${trendCls}"><span class="k">trend</span><span class="v">${arrow} ${esc(trendWord.trim())}</span></span>`);
+  // rsi gauge
+  if(typeof r.rsi==="number"){
+    const pos=Math.max(0,Math.min(100,r.rsi));
+    out.push(`<span class="chip rsi"><span class="k">rsi</span><span class="v">${Math.round(r.rsi)}</span>
+      <span class="gauge"><span class="z lo"></span><span class="z hi"></span><span class="mk" style="left:${pos}%"></span></span></span>`);
+  }
+  // band position (%B)
+  if(typeof r.pctB==="number"){
+    const b=Math.round(r.pctB*100);
+    const cls = b>100?"neg":b<0?"pos":"";
+    out.push(`<span class="chip ${cls}"><span class="k">band</span><span class="v">${b}%</span></span>`);
+  }
+  // momentum /hr
+  if(typeof r.momentumPctPerStep==="number"){
+    const m=r.momentumPctPerStep;
+    const cls = m>0?"pos":m<0?"neg":"";
+    const s = (m>0?"+":"")+m.toFixed(2);
+    out.push(`<span class="chip ${cls}"><span class="k">mom</span><span class="v">${s}%/hr</span></span>`);
+  }
+  // volume
+  if(r.volume&&typeof r.volume.rising==="boolean"){
+    out.push(`<span class="chip"><span class="k">vol</span><span class="v">${r.volume.rising?"rising":"easing"}</span></span>`);
+  }
+  return `<div class="reads">${out.join("")}</div>`;
+}
+
+function card(id, c){
+  const {sym,name}=label(id);
+  const r=c.readout, dir=dirOf(r);
+  const body = r
+    ? `${esc(r.summary||"")}`
+    : `Readout unavailable — data didn't come through this cycle.`;
+  const readCls = r ? dir : "";
+  const inner = r
+    ? `<div class="read ${readCls}">${leadify(r)}</div>${chartSVG(c.series,dir)}${reads(r)}`
+    : `<div class="unavail">${body}</div>`;
+  return `<section class="card">
+    <div class="head">
+      <div><div class="sym">${esc(sym)}</div><div class="name">${esc(name)}</div></div>
+      <div class="price"><span class="cur">$</span>${fmtPrice(c.price)}</div>
+    </div>
+    ${inner}
+  </section>`;
+}
+
+// bold the first clause of the summary (the verdict) as the lead
+function leadify(r){
+  const s = r.summary||"";
+  const i = s.indexOf(",");
+  if(i<0) return `<span class="lead">${esc(s)}</span>`;
+  return `<span class="lead">${esc(s.slice(0,i))}</span>${esc(s.slice(i))}`;
+}
+
+function setStatus(updatedAt){
+  const el=document.getElementById("status"), txt=document.getElementById("statusText");
+  const age = Date.now()-Date.parse(updatedAt);
+  el.className="status";
+  if(isNaN(age)){ txt.textContent="updated · unknown"; return; }
+  if(age>STALE_MS){ el.classList.add("stale"); txt.textContent="stale · "+relTime(updatedAt); }
+  else{ el.classList.add("fresh"); txt.textContent=relTime(updatedAt); }
+}
+
+function renderEmpty(msg){
+  document.getElementById("grid").innerHTML =
+    `<div class="empty"><div class="big">Nothing to show yet</div>${esc(msg)}</div>`;
+  const el=document.getElementById("status"); el.className="status";
+  document.getElementById("statusText").textContent="no data";
+}
+
+function render(data){
+  const coins = data && data.coins;
+  if(!coins || !Object.keys(coins).length){
+    renderEmpty("Criptis writes this file each time its watcher runs, every couple of hours.");
+    return;
+  }
+  setStatus(data.updatedAt);
+  document.getElementById("grid").innerHTML =
+    Object.entries(coins).map(([id,c])=>card(id, c||{})).join("");
+}
+
+async function load(){
+  try{
+    const res = await fetch(DATA_URL, {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    render(await res.json());
+  }catch(err){
+    // SW may still serve a cached copy offline; only show empty if nothing rendered yet
+    if(!document.querySelector(".card")){
+      renderEmpty("Couldn't reach the data file ("+esc(err.message)+"). It'll appear once published.");
+    }
+  }
+}
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+}
+load();
+setInterval(load, REFRESH_MS);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) load(); });
+</script>
+</body>
+</html>
