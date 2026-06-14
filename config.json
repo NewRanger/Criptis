@@ -1,6 +1,6 @@
 {
   "coins": ["bitcoin", "ethereum", "solana", "ripple", "dogecoin"],
-  "changeThresholdPct": 0.9,
+  "changeThresholdPct": 1.5,
   "driftThresholdPct": 4,
   "streakLength": 5,
   "email": {
