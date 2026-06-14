@@ -1,6 +1,6 @@
 {
   "coins": ["bitcoin", "ethereum", "solana", "ripple", "dogecoin"],
-  "changeThresholdPct": 1.5,
+  "changeThresholdPct": 0.9,
   "driftThresholdPct": 4,
   "email": {
     "to": ["ohsomeonesin@gmail.com", "lexoleqso@gmail.com"],
