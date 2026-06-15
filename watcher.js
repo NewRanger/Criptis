@@ -455,15 +455,18 @@ async function main() {
 
     // Trend streak: N checks in a row moving the same way. Catches a slow, steady
     // grind where each ~2h step stays under changeThresholdPct yet never reverses.
-    // Fires once — the moment the run reaches streakLength — so a long trend isn't
-    // re-alerted every check (next check len is N+1, not N, so it stays quiet).
+    // Re-fires every streakLength checks the run keeps going (len 5, 10, 15, …) so a
+    // trend that holds its direction keeps alerting, not just on the first crossing.
+    // A reversal or a flat tick resets the run, and the next alert waits a fresh N
+    // steps. (history caps at HISTORY_LIMIT, so on a very long run len tops out there
+    // and the last few multiples can't be reached — a >~40h one-way grind is rare.)
     let streakInfo = null;
     const streak = trendStreak(history, price);
-    if (streakLength >= 2 && streak.len === streakLength) {
+    if (streakLength >= 2 && streak.len > 0 && streak.len % streakLength === 0) {
       const startT = history[history.length - streak.len].t;
       const windowH = Math.round((now - startT) / HOUR);
       const dirWord = streak.dir > 0 ? "up" : "down";
-      reasons.push(`${streakLength} checks in a row ${dirWord} (${fmtPct(streak.netPct)} over ~${windowH}h)`);
+      reasons.push(`${streak.len} checks in a row ${dirWord} (${fmtPct(streak.netPct)} over ~${windowH}h)`);
       streakInfo = streak;
     }
 
