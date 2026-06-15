@@ -230,7 +230,7 @@ function headline(a) {
   // multi-check trend can matter more than the latest 1h tick (which may be ~0).
   const candidates = [{ move: a.changePct, window: "1h" }];
   if (a.driftPct !== null) candidates.push({ move: a.driftPct, window: "24h" });
-  if (a.streak) candidates.push({ move: a.streak.netPct, window: `${a.streak.len}-check trend` });
+  if (a.streak) candidates.push({ move: a.streak.netPct, window: `${a.streak.len} შემოწმება` });
   const top = candidates.reduce((b, c) => (Math.abs(c.move) > Math.abs(b.move) ? c : b));
   return `${top.move >= 0 ? "\u{1F4C8}" : "\u{1F4C9}"} ${a.coin} ${fmtPrice(a.price)} (${fmtPct(top.move)} ${top.window})`;
 }
@@ -242,24 +242,33 @@ function buildBody(alerts, analysis) {
       .map((p) => `  ${fmtTime(p.t)}  ${fmtPrice(p.p)}`)
       .join("\n");
     const indicators = a.readout
-      ? [`Indicators: ${a.readout.summary}`, `  ${readoutMetrics(a.readout)}`]
+      ? [`ინდიკატორები: ${a.readout.summary}`, `  ${readoutMetrics(a.readout)}`]
       : [];
     return [
       `${a.coin.toUpperCase()} — ${fmtPrice(a.price)}`,
-      `Triggered: ${a.reasons.join("; ")}`,
+      `მიზეზი: ${a.reasons.join("; ")}`,
       ...indicators,
-      `Recent prices:`,
+      `ბოლო ფასები:`,
       hist,
     ].join("\n");
   });
   const tail = analysis
-    ? `Analysis:\n${analysis}`
-    : "Analysis unavailable (Anthropic call failed or no key) — raw numbers above.";
+    ? `ანალიზი:\n${analysis}`
+    : "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
   return `${sections.join("\n\n")}\n\n${tail}\n\n— Criptis`;
 }
 
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// Light formatting for the analysis paragraph: escape first, then turn *…* / **…**
+// emphasis into bold and newlines into <br>. The prompt tells the model it may wrap
+// key numbers/terms in single asterisks; the plain-text body keeps them literal.
+const mdLite = (s) =>
+  esc(s)
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br>");
 
 // QuickChart line-chart image of the stored price history. Decorative only — if
 // QuickChart is unreachable the <img> just doesn't render and the card's numbers
@@ -320,7 +329,7 @@ function readoutHtml(r) {
   if (r.volume) chips.push(chip("volume", r.volume.rising ? "rising" : "easing"));
   return `
         <div style="border-top:1px solid #2b3139;margin:0 0 14px;padding-top:12px;">
-          <div style="color:#848e9c;font-size:12px;line-height:1.5;margin-bottom:8px;"><span style="color:#eaecef;font-weight:600;">Indicators</span> · ${esc(r.summary)}</div>
+          <div style="color:#848e9c;font-size:12px;line-height:1.5;margin-bottom:8px;"><span style="color:#eaecef;font-weight:600;">ინდიკატორები</span> · ${esc(r.summary)}</div>
           <div>${chips.join("")}</div>
         </div>`;
 }
@@ -332,7 +341,7 @@ function buildHtml(alerts, analysis) {
   const cards = alerts.map((a) => {
     const pills = [pill(a.changePct, "1h")];
     if (a.driftPct !== null) pills.push(pill(a.driftPct, "24h"));
-    if (a.streak) pills.push(pill(a.streak.netPct, `${a.streak.len}-check`));
+    if (a.streak) pills.push(pill(a.streak.netPct, `${a.streak.len} შემოწმება`));
     return `
       <div style="background:#1e2329;border-radius:12px;padding:18px 20px;margin:0 0 16px;">
         <div style="color:#eaecef;font-size:15px;font-weight:700;letter-spacing:.5px;">${esc(a.coin.toUpperCase())}</div>
@@ -344,14 +353,14 @@ function buildHtml(alerts, analysis) {
       </div>`;
   });
   const analysisHtml = analysis
-    ? `<div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;color:#d6dae0;font-size:14px;line-height:1.6;">${esc(analysis).replace(/\n/g, "<br>")}</div>`
-    : `<div style="color:#848e9c;font-size:13px;">Analysis unavailable — raw numbers above.</div>`;
+    ? `<div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;color:#d6dae0;font-size:14px;line-height:1.6;">${mdLite(analysis)}</div>`
+    : `<div style="color:#848e9c;font-size:13px;">ანალიზი დროებით მიუწვდომელია — იხ. ციფრები ზემოთ.</div>`;
   return `<!doctype html><html><body style="margin:0;padding:20px;background:#181a20;font-family:Arial,Helvetica,sans-serif;">
     <div style="max-width:600px;margin:0 auto;">
-      <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">⚡ Criptis alert</div>
+      <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">⚡ Criptis შეტყობინება</div>
       ${cards.join("")}
       ${analysisHtml}
-      <div style="color:#5e6673;font-size:11px;margin-top:16px;">Criptis · automated price watcher · not financial advice</div>
+      <div style="color:#5e6673;font-size:11px;margin-top:16px;">Criptis · ავტომატური ფასის მეთვალყურე · ეს არ არის ფინანსური რჩევა</div>
     </div>
   </body></html>`;
 }
@@ -435,7 +444,7 @@ async function main() {
 
     const reasons = [];
     if (changePct !== null && Math.abs(changePct) > changeThresholdPct) {
-      reasons.push(`${fmtPct(changePct)} since last check (threshold ${changeThresholdPct}%)`);
+      reasons.push(`${fmtPct(changePct)} ბოლო შემოწმების შემდეგ (ზღვარი ${changeThresholdPct}%)`);
     }
     // BUG-2: drift is edge-triggered via a per-coin latch so a sustained move
     // alerts once instead of every run for ~24h. Read the latch defensively (older
@@ -448,7 +457,7 @@ async function main() {
       const decision = driftDecision(driftPct, driftThresholdPct, prevDriftDir, DRIFT_REARM);
       driftDir = decision.nextDir;
       if (decision.fire) {
-        reasons.push(`${fmtPct(driftPct)} drift vs ~24h ago (threshold ${driftThresholdPct}%)`);
+        reasons.push(`${fmtPct(driftPct)} ცვლილება ~24სთ წინანდელთან შედარებით (ზღვარი ${driftThresholdPct}%)`);
       }
     }
     entry.lastDriftDir = driftDir;
@@ -465,8 +474,8 @@ async function main() {
     if (streakLength >= 2 && streak.len > 0 && streak.len % streakLength === 0) {
       const startT = history[history.length - streak.len].t;
       const windowH = Math.round((now - startT) / HOUR);
-      const dirWord = streak.dir > 0 ? "up" : "down";
-      reasons.push(`${streak.len} checks in a row ${dirWord} (${fmtPct(streak.netPct)} over ~${windowH}h)`);
+      const dirWord = streak.dir > 0 ? "ზრდის" : "კლების";
+      reasons.push(`ზედიზედ ${streak.len} შემოწმება ${dirWord} მიმართულებით (${fmtPct(streak.netPct)} ~${windowH}სთ-ში)`);
       streakInfo = streak;
     }
 

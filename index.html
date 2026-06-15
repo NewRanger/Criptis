@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ka">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -622,28 +622,28 @@
         /* ---- glossary (plain-language, descriptive; never predictive) ---- */
         var GLOSSARY = {
           trend: {
-            label: "Trend",
-            body: "The overall read: which way price is leaning and how convincing it is — e.g. \u201CDowntrend, moderate.\u201D The strength word comes from how cleanly the move fits a straight line, not from how far it's gone.",
+            label: "ტრენდი",
+            body: "მთავარი დასკვნა: საით იხრება ფასი და რამდენად დამაჯერებლად — მაგ. „კლების ტრენდი, ზომიერი“. სიძლიერის სიტყვა მოდის იქიდან, თუ რამდენად სუფთად ჯდება მოძრაობა სწორ ხაზზე, და არა იქიდან, რამდენად შორს წავიდა.",
           },
           rsi: {
             label: "RSI",
-            body: "Relative Strength Index \u2014 a 0\u2013100 gauge of how hard price has been pushed lately. Above 70 it has run hot, below 30 it has run cold. It describes the recent push; it doesn't predict the next one.",
+            body: "Relative Strength Index — 0–100 მაჩვენებელი იმისა, თუ რამდენად ძლიერ აიწია ან დაიწია ფასი ბოლო ხანებში. 70-ზე ზემოთ აქტივი „გახურდა“, 30-ის ქვემოთ — „გაცივდა“. ის აღწერს ბოლო მოძრაობას და არ წინასწარმეტყველებს შემდეგს.",
           },
           r2: {
-            label: "R\u00B2 (trend cleanness)",
-            body: "How tidily price sits on a straight line. 1.0 is a ruler-clean trend; near 0 is mostly noise. It tells you how clean the move is \u2014 not which direction it's heading.",
+            label: "R² (ტრენდის სისუფთავე)",
+            body: "რამდენად მოწესრიგებულად დევს ფასი სწორ ხაზზე. 1.0 — სახაზავივით სუფთა ტრენდი; 0-თან ახლოს — უმეტესად ხმაური. ის გეუბნება, რამდენად სუფთაა მოძრაობა, და არა მის მიმართულებას.",
           },
           band: {
-            label: "Band position",
-            body: "Where price sits inside its recent low-to-high envelope (the Bollinger band). 0% hugs the floor, 100% hugs the ceiling. Past either end means the move is stretched beyond its usual range.",
+            label: "პოზიცია ზოლში",
+            body: "სად დევს ფასი თავის ბოლოდროინდელ მინიმუმ-მაქსიმუმის გარსში (Bollinger-ის ზოლი). 0% იატაკს ეკვრის, 100% — ჭერს. ნებისმიერი ბოლოს მიღმა გასვლა ნიშნავს, რომ მოძრაობა ჩვეულ ფარგლებს გასცდა.",
           },
           momentum: {
-            label: "Momentum",
-            body: "The average pace of the move \u2014 roughly how many percent price is drifting each hour. A bigger number is a faster move; the sign tells you the direction. It measures speed, not a target.",
+            label: "მომენტუმი",
+            body: "მოძრაობის საშუალო ტემპი — დაახლოებით რამდენ პროცენტს იცვლება ფასი ყოველ საათში. დიდი რიცხვი უფრო სწრაფ მოძრაობას ნიშნავს; ნიშანი მიმართულებას აჩვენებს. ის ზომავს სიჩქარეს და არა სამიზნეს.",
           },
           volume: {
-            label: "Volume trend",
-            body: "Whether trading activity is picking up or fading versus its own recent average. Rising volume backs a move and makes it look more real; easing volume makes the same move look thinner.",
+            label: "მოცულობის ტრენდი",
+            body: "იზრდება თუ იკლებს ვაჭრობის აქტივობა საკუთარ ბოლოდროინდელ საშუალოსთან შედარებით. მზარდი მოცულობა მოძრაობას ამყარებს და უფრო რეალურს ხდის; კლებადი მოცულობა იმავე მოძრაობას უფრო თხელად აჩვენებს.",
           },
         };
         var SHORT_LABEL = {
@@ -653,6 +653,14 @@
           band: "BAND",
           momentum: "MOM",
           volume: "VOL",
+        };
+        /* ---- Georgian value words (rendered from structured readout fields) ---- */
+        var DIR_WORD = { up: "\u10D6\u10E0\u10D3\u10D0\u10D3\u10D8", down: "\u10D9\u10DA\u10D4\u10D1\u10D0\u10D3\u10D8", flat: "\u10D2\u10D5\u10D4\u10E0\u10D3\u10D8\u10D7\u10D8" };
+        var CLEAN_WORD = { clean: "\u10E1\u10E3\u10E4\u10D7\u10D0", moderate: "\u10D6\u10DD\u10DB\u10D8\u10D4\u10E0\u10D8", choppy: "\u10D0\u10E0\u10D4\u10E3\u10DA\u10D8" };
+        var TREND_LEAD = {
+          up: "\u10D6\u10E0\u10D3\u10D8\u10E1 \u10E2\u10E0\u10D4\u10DC\u10D3\u10D8",
+          down: "\u10D9\u10DA\u10D4\u10D1\u10D8\u10E1 \u10E2\u10E0\u10D4\u10DC\u10D3\u10D8",
+          flat: "\u10DB\u10D9\u10D0\u10E4\u10D8\u10DD \u10E2\u10E0\u10D4\u10DC\u10D3\u10D8 \u10D0\u10E0 \u10E9\u10D0\u10DC\u10E1",
         };
 
         /* ---- tiny DOM helper ---- */
@@ -702,13 +710,13 @@
         function relTime(iso, now) {
           now = now || Date.now();
           var t = typeof iso === "number" ? iso : Date.parse(iso);
-          if (isNaN(t)) return "unknown";
+          if (isNaN(t)) return "უცნობი";
           var m = Math.max(0, Math.round((now - t) / 60000));
-          if (m < 1) return "just now";
-          if (m < 60) return m + "m ago";
+          if (m < 1) return "ეს-ესაა";
+          if (m < 60) return m + " წთ წინ";
           var h = Math.floor(m / 60),
             mm = m % 60;
-          return mm ? h + "h " + mm + "m ago" : h + "h ago";
+          return mm ? h + " სთ " + mm + " წთ წინ" : h + " სთ წინ";
         }
         function dirColor(d) {
           return d === "up"
@@ -805,9 +813,9 @@
           }
           var text =
             s === "loading"
-              ? "loading\u2026"
+              ? "\u10D8\u10E2\u10D5\u10D8\u10E0\u10D7\u10D4\u10D1\u10D0\u2026"
               : s === "stale"
-                ? "stale \u00B7 " + relTime(updatedAt, now)
+                ? "\u10DB\u10DD\u10EB\u10D5\u10D4\u10DA\u10D3\u10D0 \u00B7 " + relTime(updatedAt, now)
                 : relTime(updatedAt, now);
           var wrap = el("span", {
             class: "status" + (s === "stale" ? " stale" : ""),
@@ -829,8 +837,8 @@
           );
           h.appendChild(
             tip(trigger, {
-              title: "Last updated",
-              body: "When the watcher last wrote fresh data. Criptis re-reads the market about every hour; after one missed cycle the status turns stale.",
+              title: "ბოლო განახლება",
+              body: "როდის ჩაწერა მეთვალყურემ ბოლოს ახალი მონაცემები. Criptis ბაზარს დაახლოებით ყოველ საათში კითხულობს; ერთი ციკლის გამოტოვების შემდეგ სტატუსი „მოძველებულზე“ გადადის.",
               placement: "bottom",
             }),
           );
@@ -1039,7 +1047,7 @@
               : r.direction === "down"
                 ? "\u2193"
                 : "\u2192";
-          var dirWord = r.direction === "flat" ? "flat" : r.direction;
+          var dirWord = DIR_WORD[r.direction] || r.direction;
           var span = el("span");
           span.appendChild(
             el("span", {
@@ -1051,7 +1059,7 @@
             span.appendChild(
               el("span", {
                 style: "color:" + cleanColor(r.cleanliness),
-                text: ", " + r.cleanliness,
+                text: ", " + (CLEAN_WORD[r.cleanliness] || r.cleanliness),
               }),
             );
           }
@@ -1089,7 +1097,7 @@
             out.push(
               indicatorChip({
                 term: "momentum",
-                value: (m > 0 ? "+" : "") + m.toFixed(2) + "%/hr",
+                value: (m > 0 ? "+" : "") + m.toFixed(2) + "%/სთ",
                 tone: m > 0 ? "pos" : m < 0 ? "neg" : "neutral",
                 block: true,
               }),
@@ -1099,7 +1107,7 @@
             out.push(
               indicatorChip({
                 term: "volume",
-                value: r.volume.rising ? "rising" : "easing",
+                value: r.volume.rising ? "იზრდება" : "იკლებს",
                 block: true,
               }),
             );
@@ -1107,12 +1115,34 @@
         }
 
         /* ---- readout block (verdict lead + supporting detail) ---- */
+        function readoutText(r) {
+          var lead = TREND_LEAD[r.direction] || TREND_LEAD.flat;
+          var rest = [];
+          if (typeof r.r2 === "number" && r.cleanliness)
+            rest.push(
+              (CLEAN_WORD[r.cleanliness] || r.cleanliness) +
+                " (R²=" +
+                r.r2.toFixed(2) +
+                ")",
+            );
+          if (typeof r.rsi === "number") rest.push("RSI " + Math.round(r.rsi));
+          if (typeof r.pctB === "number")
+            rest.push(
+              r.pctB > 1
+                ? "ფასი ზედა ზოლის ზემოთ"
+                : r.pctB < 0
+                  ? "ფასი ქვედა ზოლის ქვემოთ"
+                  : Math.round(r.pctB * 100) + "% ზოლის შიგნით",
+            );
+          if (r.volume && typeof r.volume.rising === "boolean")
+            rest.push(r.volume.rising ? "მოცულობა იზრდება" : "მოცულობა იკლებს");
+          return { lead: lead, rest: rest.join(", ") };
+        }
+
         function readoutBlock(r) {
-          var s = r.summary || "";
-          var i = s.indexOf(",");
-          var lead = i < 0 ? s : s.slice(0, i);
-          var rest = i < 0 ? "" : s.slice(i + 1).trim();
-          if (rest) rest = rest.charAt(0).toUpperCase() + rest.slice(1);
+          var parts = readoutText(r);
+          var lead = parts.lead;
+          var rest = parts.rest;
 
           var block = el("div", { class: "readout" });
           var leadSpan = el("strong", {
@@ -1188,7 +1218,7 @@
             nd.insertAdjacentHTML("afterbegin", NODATA_ICON);
             nd.appendChild(
               document.createTextNode(
-                "Readout unavailable \u2014 data didn't come through this cycle.",
+                "\u10db\u10dd\u10dc\u10d0\u10ea\u10d4\u10db\u10d4\u10d1\u10d8 \u10db\u10d8\u10e3\u10ec\u10d5\u10d3\u10dd\u10db\u10d4\u10da\u10d8\u10d0 \u2014 \u10d0\u10db \u10ea\u10d8\u10d9\u10da\u10e8\u10d8 \u10d5\u10d4\u10e0 \u10db\u10dd\u10d5\u10d8\u10d3\u10d0.",
               ),
             );
             uc.appendChild(nd);
@@ -1282,7 +1312,7 @@
           );
           var grid = el("main", {
             class: "grid",
-            "aria-label": "Coin readouts",
+            "aria-label": "მონეტების მონაცემები",
           });
           for (var i = 0; i < coins.length; i++)
             grid.appendChild(coinCard(coins[i]));
@@ -1291,7 +1321,7 @@
             "footer",
             { class: "footer" },
             el("span", {
-              text: "Descriptive readout \u2014 not financial advice.",
+              text: "\u10d0\u10e6\u10ec\u10d4\u10e0\u10d8\u10d7\u10d8 \u10db\u10dd\u10dc\u10d0\u10ea\u10d4\u10db\u10d4\u10d1\u10d8 \u2014 \u10d4\u10e1 \u10d0\u10e0 \u10d0\u10e0\u10d8\u10e1 \u10e4\u10d8\u10dc\u10d0\u10dc\u10e1\u10e3\u10e0\u10d8 \u10e0\u10e9\u10d4\u10d5\u10d0.",
             }),
           );
           wrap.appendChild(footer);
