@@ -1,300 +1,1395 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Criptis</title>
-<meta name="theme-color" content="#0c0e12" />
-<meta name="description" content="A quiet instrument panel reading the market — descriptive, not advisory." />
-<link rel="manifest" href="./manifest.json" />
-<link rel="apple-touch-icon" href="./icons/icon-192.png" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<style>
-  /* ---- tokens ------------------------------------------------------------ */
-  :root{
-    --bg:#0c0e12;          /* deep warm-slate, not pure black */
-    --surface:#14171d;     /* card */
-    --surface-2:#1b1f27;   /* inner panels / chips */
-    --line:#252a33;        /* hairlines */
-    --text:#e7e3da;        /* warm off-white (forged, not stark) */
-    --dim:#868d97;         /* secondary */
-    --faint:#5b626c;       /* tertiary / disabled */
-    --amber:#f3a13c;       /* the signature — heat */
-    --amber-soft:rgba(243,161,60,.14);
-    --up:#2ebd85;          /* gains, softened */
-    --down:#e25c5c;        /* losses, softened */
-    --up-soft:rgba(46,189,133,.12);
-    --down-soft:rgba(226,92,79,.12);
-    --mono:ui-monospace,"SF Mono","Cascadia Code","Roboto Mono",Menlo,Consolas,monospace;
-    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0}
-  body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:var(--sans);
-    -webkit-font-smoothing:antialiased;
-    line-height:1.45;
-    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  }
-  .wrap{max-width:760px;margin:0 auto;padding:18px 16px 56px}
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0c0e12" />
+    <title>Criptis</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        /* surfaces & lines */
+        --bg: #0c0e12;
+        --surface: #14171d;
+        --surface-2: #1b1f27;
+        --surface-3: #222732;
+        --line: #252a33;
+        --line-strong: #323844;
+        /* text */
+        --text: #e7e3da;
+        --dim: #868d97;
+        --faint: #5b626c;
+        --ghost: #3a4049;
+        /* amber */
+        --amber: #f3a13c;
+        --amber-bright: #ffb457;
+        --amber-dim: #b9783085;
+        --amber-soft: rgba(243, 161, 60, 0.14);
+        --amber-line: rgba(243, 161, 60, 0.32);
+        --amber-glow: rgba(243, 161, 60, 0.45);
+        /* semantics */
+        --up: #2ebd85;
+        --down: #e25c5c;
+        --neutral: #868d97;
+        --up-soft: rgba(46, 189, 133, 0.12);
+        --down-soft: rgba(226, 92, 79, 0.12);
+        --neutral-soft: rgba(134, 141, 151, 0.12);
+        --up-line: rgba(46, 189, 133, 0.3);
+        --down-line: rgba(226, 92, 79, 0.3);
+        /* fonts */
+        --font-mono:
+          "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
+          Consolas, monospace;
+        --font-sans:
+          "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        --fw-regular: 400;
+        --fw-medium: 500;
+        --fw-semibold: 600;
+        --fw-bold: 700;
+        /* type scale */
+        --text-2xs: 9.5px;
+        --text-xs: 11.5px;
+        --text-sm: 12.5px;
+        --text-base: 13.5px;
+        --text-md: 15px;
+        --text-lg: 17px;
+        --text-xl: 20px;
+        --text-2xl: 26px;
+        --text-3xl: 34px;
+        --leading-tight: 1.1;
+        --leading-snug: 1.3;
+        --leading-normal: 1.45;
+        --leading-relaxed: 1.6;
+        --tracking-tight: -0.01em;
+        --tracking-normal: 0;
+        --tracking-data: 0.02em;
+        --tracking-wide: 0.08em;
+        --tracking-wider: 0.1em;
+        --tracking-brand: 0.22em;
+        /* type roles */
+        --type-brand: var(--fw-bold) var(--text-md)/var(--leading-tight)
+          var(--font-sans);
+        --type-ticker: var(--fw-semibold) var(--text-lg)/var(--leading-tight)
+          var(--font-mono);
+        --type-price: var(--fw-semibold) var(--text-xl)/var(--leading-tight)
+          var(--font-mono);
+        --type-read: var(--fw-regular) var(--text-base)/var(--leading-normal)
+          var(--font-sans);
+        --type-chip: var(--fw-medium) var(--text-xs)/1 var(--font-mono);
+        --type-key: var(--fw-medium) var(--text-2xs)/1 var(--font-mono);
+        /* spacing / radius / elevation */
+        --radius-xs: 4px;
+        --radius-sm: 7px;
+        --radius-md: 10px;
+        --radius-lg: 14px;
+        --radius-xl: 18px;
+        --radius-pill: 999px;
+        --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --elev-2: 0 4px 14px -6px rgba(0, 0, 0, 0.5);
+        --elev-float:
+          0 10px 30px -10px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--line);
+        --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --dur-fast: 120ms;
+        --dur-base: 180ms;
+        --dur-slow: 280ms;
+        --container-max: 1200px;
+      }
 
-  /* ---- header ------------------------------------------------------------ */
-  header.top{
-    display:flex;align-items:baseline;justify-content:space-between;
-    gap:12px;padding:6px 2px 18px;
-  }
-  .brand{
-    font-weight:700;letter-spacing:.22em;text-transform:uppercase;
-    font-size:15px;color:var(--text);
-  }
-  .brand b{color:var(--amber);font-weight:700}
-  .status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);font-family:var(--mono)}
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
-  .status.fresh .dot{background:var(--amber);box-shadow:0 0 0 0 var(--amber-soft);animation:pulse 2.4s ease-out infinite}
-  .status.stale{color:var(--down)}
-  .status.stale .dot{background:var(--down)}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(243,161,60,.45)}70%{box-shadow:0 0 0 7px rgba(243,161,60,0)}100%{box-shadow:0 0 0 0 rgba(243,161,60,0)}}
-  @media (prefers-reduced-motion:reduce){.status.fresh .dot{animation:none}}
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        font: var(--type-read);
+      }
+      #app {
+        min-height: 100vh;
+      }
+      :focus-visible {
+        outline: 2px solid var(--amber);
+        outline-offset: 2px;
+        border-radius: 2px;
+      }
 
-  /* ---- card -------------------------------------------------------------- */
-  .grid{display:grid;gap:12px}
-  @media(min-width:620px){.grid{grid-template-columns:1fr 1fr}}
-  .card{
-    background:var(--surface);border:1px solid var(--line);border-radius:14px;
-    padding:15px 15px 13px;display:flex;flex-direction:column;gap:11px;
-  }
-  .card .head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-  .sym{font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:.02em;line-height:1}
-  .name{font-size:11.5px;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
-  .price{font-family:var(--mono);font-size:20px;font-weight:600;text-align:right;line-height:1;font-variant-numeric:tabular-nums}
-  .price .cur{color:var(--faint);font-size:12px;margin-right:1px}
+      @keyframes criptis-shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+      @keyframes criptis-pulse {
+        0% {
+          box-shadow: 0 0 0 0 var(--amber-glow);
+        }
+        70% {
+          box-shadow: 0 0 0 5px rgba(0, 0, 0, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+        }
+      }
 
-  /* the read — the hero of the card */
-  .read{font-size:13.5px;color:var(--text);min-height:1px}
-  .read .lead{font-weight:600}
-  .read.up .lead{color:var(--up)} .read.down .lead{color:var(--down)} .read.flat .lead{color:var(--dim)}
+      /* layout */
+      .wrap {
+        width: 100%;
+        max-width: var(--container-max);
+        margin: 0 auto;
+        padding: 18px clamp(14px, 3vw, 28px) 40px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
+        gap: 14px;
+        align-items: start;
+      }
 
-  /* chart */
-  .chart{width:100%;height:62px;display:block;overflow:visible}
-  .chart .area{opacity:.13}
-  .chart .line{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke}
-  .chart .pt{stroke:var(--bg);stroke-width:1.5}
-  .chart.up .line,.chart.up .pt{stroke:var(--up)} .chart.up .area{fill:var(--up)}
-  .chart.down .line,.chart.down .pt{stroke:var(--down)} .chart.down .area{fill:var(--down)}
-  .chart.flat .line,.chart.flat .pt{stroke:var(--dim)} .chart.flat .area{fill:var(--dim)}
-  .chart.up .pt,.chart.down .pt,.chart.flat .pt{fill:currentColor}
+      /* header */
+      .app-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 2px 18px;
+      }
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .logo svg {
+        flex: none;
+        display: block;
+      }
+      .logo-word {
+        font: var(--type-brand);
+        letter-spacing: var(--tracking-brand);
+        text-transform: uppercase;
+        color: var(--text);
+        line-height: 1;
+      }
+      .logo-word .amber {
+        color: var(--amber);
+      }
 
-  /* readings */
-  .reads{display:flex;flex-wrap:wrap;gap:7px 6px;align-items:center}
-  .chip{
-    background:var(--surface-2);border:1px solid var(--line);border-radius:7px;
-    padding:5px 8px;display:flex;align-items:center;gap:6px;
-    font-family:var(--mono);font-size:11.5px;line-height:1;
-  }
-  .chip .k{color:var(--faint);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
-  .chip .v{color:var(--text);font-variant-numeric:tabular-nums}
-  .chip.pos .v{color:var(--up)} .chip.neg .v{color:var(--down)}
-  /* rsi gauge */
-  .rsi{gap:7px}
-  .gauge{position:relative;width:52px;height:5px;border-radius:3px;background:var(--bg);overflow:hidden;flex:none}
-  .gauge .z{position:absolute;top:0;bottom:0}
-  .gauge .lo{left:0;width:30%;background:var(--up-soft)}
-  .gauge .hi{right:0;width:30%;background:var(--down-soft)}
-  .gauge .mk{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--text);border-radius:2px}
+      /* status */
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font: var(--type-chip);
+        font-size: var(--text-sm);
+        color: var(--dim);
+      }
+      .status.stale {
+        color: var(--down);
+      }
+      .status .num {
+        font-variant-numeric: tabular-nums;
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .status-dot.fresh {
+        background: var(--amber);
+        animation: criptis-pulse 2.4s ease-out infinite;
+      }
+      .status-dot.stale {
+        background: var(--down);
+      }
+      .status-dot.loading {
+        background: var(--faint);
+      }
 
-  .unavail{font-size:12.5px;color:var(--dim);font-style:normal;padding:2px 0}
+      /* card */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        padding: 15px 15px 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        transition:
+          border-color var(--dur-base) var(--ease-standard),
+          box-shadow var(--dur-base) var(--ease-standard),
+          transform var(--dur-base) var(--ease-standard);
+      }
+      .card.ready:hover {
+        border-color: var(--line-strong);
+        box-shadow: var(--elev-2);
+        transform: translateY(-1px);
+      }
+      .card.unavailable {
+        border-style: dashed;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .ticker {
+        font: var(--type-ticker);
+        letter-spacing: var(--tracking-data);
+        color: var(--text);
+      }
+      .coin-name {
+        font: var(--type-key);
+        font-size: var(--text-xs);
+        color: var(--dim);
+        margin-top: 3px;
+        text-transform: uppercase;
+        letter-spacing: var(--tracking-wide);
+      }
+      .price {
+        font: var(--type-price);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .price .cur {
+        color: var(--faint);
+        font-size: var(--text-sm);
+        margin-right: 1px;
+      }
+      .price .ghost {
+        color: var(--ghost);
+      }
 
-  /* ---- empty / footer ---------------------------------------------------- */
-  .empty{
-    text-align:center;color:var(--dim);padding:64px 18px;border:1px dashed var(--line);
-    border-radius:14px;font-size:14px;
-  }
-  .empty .big{color:var(--text);font-size:16px;margin-bottom:6px;font-weight:600}
-  footer.foot{margin-top:26px;text-align:center;color:var(--faint);font-size:11px;font-family:var(--mono);letter-spacing:.04em}
-  footer.foot a{color:var(--dim);text-decoration:none}
-  :focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
-</style>
-</head>
-<body>
-  <div class="wrap">
-    <header class="top">
-      <div class="brand">Crip<b>tis</b></div>
-      <div class="status" id="status" aria-live="polite"><span class="dot"></span><span id="statusText">loading…</span></div>
-    </header>
-    <main id="grid" class="grid" aria-live="polite"></main>
-    <footer class="foot">Descriptive readout — not financial advice. <span id="src"></span></footer>
-  </div>
+      /* readout */
+      .readout {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .readout-lead {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-family: var(--font-sans);
+        font-weight: var(--fw-semibold);
+        font-size: var(--text-md);
+        line-height: var(--leading-tight);
+        border-bottom: 1px dotted var(--faint);
+        cursor: help;
+        padding-bottom: 1px;
+      }
+      .readout-lead svg {
+        flex: none;
+        opacity: 0.65;
+        transform: translateY(0.5px);
+        margin-left: 3px;
+      }
+      .readout-rest {
+        font-family: var(--font-sans);
+        font-weight: var(--fw-regular);
+        font-size: var(--text-sm);
+        line-height: var(--leading-normal);
+        color: color-mix(in srgb, var(--text) 60%, var(--dim));
+        text-wrap: pretty;
+      }
 
-<script type="module">
-// ----- config ------------------------------------------------------------
-// Where the cron publishes data. Default assumes GitHub Pages served from the
-// repo root, with the file at public/data.json. If you serve a different folder,
-// change this to e.g. "./data.json".
-const DATA_URL = "./public/data.json";
-const REFRESH_MS = 60_000;     // re-poll an open tab every minute
-const STALE_MS = 2.5 * 3600_000; // older than ~2.5h (> one 2h cycle) reads as stale
+      /* chart */
+      .chart-wrap {
+        width: 100%;
+      }
+      .chart {
+        width: 100%;
+        height: 62px;
+        display: block;
+        overflow: visible;
+      }
+      .chart-loading {
+        width: 100%;
+        height: 62px;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(
+          90deg,
+          var(--surface-2) 0%,
+          var(--surface-3) 50%,
+          var(--surface-2) 100%
+        );
+        background-size: 200% 100%;
+        animation: criptis-shimmer 1.4s ease-in-out infinite;
+      }
 
-// id -> display, with a graceful fallback for anything not listed
-const COINS = {
-  bitcoin:{sym:"BTC",name:"Bitcoin"}, ethereum:{sym:"ETH",name:"Ethereum"},
-  solana:{sym:"SOL",name:"Solana"},   ripple:{sym:"XRP",name:"XRP"},
-  dogecoin:{sym:"DOGE",name:"Dogecoin"},
-};
-const label = id => COINS[id] || {sym:id.slice(0,5).toUpperCase(), name:id};
+      /* chips */
+      .chips {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .chip {
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 7px 10px;
+        font: var(--type-chip);
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .chip.block {
+        display: flex;
+        width: 100%;
+        justify-content: space-between;
+      }
+      .chip.unavailable {
+        border-style: dashed;
+        opacity: 0.7;
+      }
+      .chip-key {
+        color: var(--faint);
+        font: var(--type-key);
+        letter-spacing: var(--tracking-wider);
+        text-transform: uppercase;
+      }
+      .chip-key.tip-trigger {
+        border-bottom: 1px dotted var(--faint);
+        cursor: help;
+        padding-bottom: 1px;
+      }
+      .chip-val {
+        font-variant-numeric: tabular-nums;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text);
+      }
+      .chip-val.pos {
+        color: var(--up);
+      }
+      .chip-val.neg {
+        color: var(--down);
+      }
+      .chip-skel {
+        width: 26px;
+        height: 9px;
+        border-radius: 3px;
+        background: linear-gradient(
+          90deg,
+          var(--surface-2),
+          var(--surface-3),
+          var(--surface-2)
+        );
+        background-size: 200% 100%;
+        animation: criptis-shimmer 1.4s ease-in-out infinite;
+      }
 
-// ----- pure helpers (unit-tested separately) -----------------------------
-export function fmtPrice(n){
-  if(typeof n!=="number"||!isFinite(n)) return "—";
-  if(n>=1000) return n.toLocaleString("en-US",{maximumFractionDigits:2});
-  if(n>=1)    return n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:4});
-  return n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});
-}
-export function relTime(iso, now=Date.now()){
-  const t=Date.parse(iso); if(isNaN(t)) return "unknown";
-  const m=Math.max(0,Math.round((now-t)/60000));
-  if(m<1) return "just now";
-  if(m<60) return m+"m ago";
-  const h=Math.floor(m/60), mm=m%60;
-  return mm ? `${h}h ${mm}m ago` : `${h}h ago`;
-}
-// build an SVG line + area path for a series of {p} values in a w×h box
-export function chartPaths(values, w, h, pad=4){
-  const v=values.filter(x=>typeof x==="number"&&isFinite(x));
-  if(v.length<2) return null;
-  let lo=Math.min(...v), hi=Math.max(...v); if(lo===hi){lo-=1;hi+=1;}
-  const x=i=> v.length<2?pad : pad + i*(w-2*pad)/(v.length-1);
-  const y=p=> pad + (hi-p)*(h-2*pad)/(hi-lo);
-  const pts=v.map((p,i)=>[x(i),y(p)]);
-  const line="M"+pts.map(p=>p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" L ");
-  const area=line+` L ${pts[pts.length-1][0].toFixed(1)} ${h} L ${pts[0][0].toFixed(1)} ${h} Z`;
-  const last=pts[pts.length-1];
-  return {line, area, last};
-}
+      /* rsi gauge */
+      .rsi-gauge {
+        position: relative;
+        width: 60px;
+        height: 7px;
+        border-radius: 4px;
+        background: var(--surface-3);
+        border: 1px solid var(--line-strong);
+        flex: none;
+        display: inline-block;
+      }
+      .rsi-zone {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 30%;
+      }
+      .rsi-low {
+        left: 0;
+        background: var(--up-soft);
+        border-radius: 3px 0 0 3px;
+      }
+      .rsi-high {
+        right: 0;
+        background: var(--down-soft);
+        border-radius: 0 3px 3px 0;
+      }
+      .rsi-mark {
+        position: absolute;
+        top: -2.5px;
+        bottom: -2.5px;
+        width: 3px;
+        border-radius: 2px;
+        transform: translateX(-50%);
+        box-shadow: 0 0 0 1.5px var(--surface-2);
+      }
 
-// ----- rendering ---------------------------------------------------------
-const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const dirOf = r => (r&&r.direction)||"flat";
+      /* skeleton bars (loading card) */
+      .skeleton-bar {
+        display: block;
+        height: 11px;
+        border-radius: 4px;
+        background: linear-gradient(
+          90deg,
+          var(--surface-2),
+          var(--surface-3),
+          var(--surface-2)
+        );
+        background-size: 200% 100%;
+        animation: criptis-shimmer 1.4s ease-in-out infinite;
+      }
+      .skel-read {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .skel-chips {
+        display: flex;
+        gap: 6px;
+      }
 
-function chartSVG(series, dir){
-  const paths = chartPaths((series||[]).map(p=>p&&p.p), 300, 62);
-  if(!paths) return "";
-  return `<svg class="chart ${dir}" viewBox="0 0 300 62" preserveAspectRatio="none" aria-hidden="true">
-    <path class="area" d="${paths.area}"></path>
-    <path class="line" d="${paths.line}"></path>
-    <circle class="pt" cx="${paths.last[0].toFixed(1)}" cy="${paths.last[1].toFixed(1)}" r="2.6"></circle>
-  </svg>`;
-}
+      /* no-data */
+      .no-data {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--dim);
+        font: var(--type-read);
+        padding: 10px 0 6px;
+      }
+      .no-data svg {
+        flex: none;
+        color: var(--faint);
+      }
 
-function reads(r){
-  if(!r) return "";
-  const out=[];
-  // trend
-  const arrow = r.direction==="up"?"↑":r.direction==="down"?"↓":"→";
-  const trendCls = r.direction==="up"?"pos":r.direction==="down"?"neg":"";
-  const trendWord = r.direction==="flat"?"flat":(r.direction+", "+(r.cleanliness||""));
-  out.push(`<span class="chip ${trendCls}"><span class="k">trend</span><span class="v">${arrow} ${esc(trendWord.trim())}</span></span>`);
-  // rsi gauge
-  if(typeof r.rsi==="number"){
-    const pos=Math.max(0,Math.min(100,r.rsi));
-    out.push(`<span class="chip rsi"><span class="k">rsi</span><span class="v">${Math.round(r.rsi)}</span>
-      <span class="gauge"><span class="z lo"></span><span class="z hi"></span><span class="mk" style="left:${pos}%"></span></span></span>`);
-  }
-  // band position (%B)
-  if(typeof r.pctB==="number"){
-    const b=Math.round(r.pctB*100);
-    const cls = b>100?"neg":b<0?"pos":"";
-    out.push(`<span class="chip ${cls}"><span class="k">band</span><span class="v">${b}%</span></span>`);
-  }
-  // momentum /hr
-  if(typeof r.momentumPctPerStep==="number"){
-    const m=r.momentumPctPerStep;
-    const cls = m>0?"pos":m<0?"neg":"";
-    const s = (m>0?"+":"")+m.toFixed(2);
-    out.push(`<span class="chip ${cls}"><span class="k">mom</span><span class="v">${s}%/hr</span></span>`);
-  }
-  // volume
-  if(r.volume&&typeof r.volume.rising==="boolean"){
-    out.push(`<span class="chip"><span class="k">vol</span><span class="v">${r.volume.rising?"rising":"easing"}</span></span>`);
-  }
-  return `<div class="reads">${out.join("")}</div>`;
-}
+      /* footer */
+      .footer {
+        margin-top: 28px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: center;
+      }
+      .footer span {
+        font: var(--type-chip);
+        font-size: var(--text-xs);
+        color: var(--faint);
+        letter-spacing: var(--tracking-data);
+        text-align: center;
+      }
 
-function card(id, c){
-  const {sym,name}=label(id);
-  const r=c.readout, dir=dirOf(r);
-  const body = r
-    ? `${esc(r.summary||"")}`
-    : `Readout unavailable — data didn't come through this cycle.`;
-  const readCls = r ? dir : "";
-  const inner = r
-    ? `<div class="read ${readCls}">${leadify(r)}</div>${chartSVG(c.series,dir)}${reads(r)}`
-    : `<div class="unavail">${body}</div>`;
-  return `<section class="card">
-    <div class="head">
-      <div><div class="sym">${esc(sym)}</div><div class="name">${esc(name)}</div></div>
-      <div class="price"><span class="cur">$</span>${fmtPrice(c.price)}</div>
-    </div>
-    ${inner}
-  </section>`;
-}
+      /* tooltip */
+      .tip-wrap {
+        position: relative;
+        display: inline-flex;
+        vertical-align: baseline;
+      }
+      .tip-trigger {
+        cursor: help;
+      }
+      .tip-bubble {
+        position: absolute;
+        z-index: 40;
+        left: 50%;
+        transform: translateX(-50%) translateY(4px);
+        width: max-content;
+        max-width: 260px;
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius-md);
+        box-shadow: var(--elev-float);
+        padding: 10px 12px;
+        font: var(--type-read);
+        line-height: var(--leading-snug);
+        text-align: left;
+        text-transform: none;
+        letter-spacing: normal;
+        pointer-events: none;
+        opacity: 0;
+        transition:
+          opacity var(--dur-base) var(--ease-out),
+          transform var(--dur-base) var(--ease-out);
+      }
+      .tip-bubble.tip-top {
+        bottom: calc(100% + 9px);
+      }
+      .tip-bubble.tip-bottom {
+        top: calc(100% + 9px);
+        transform: translateX(-50%) translateY(-4px);
+      }
+      .tip-wrap:hover .tip-bubble,
+      .tip-wrap:focus-within .tip-bubble,
+      .tip-wrap.open .tip-bubble {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      .tip-title {
+        display: block;
+        font: var(--type-key);
+        letter-spacing: var(--tracking-wider);
+        text-transform: uppercase;
+        color: var(--amber);
+        margin-bottom: 5px;
+      }
+      .tip-body {
+        display: block;
+        color: var(--text);
+      }
+      .tip-caret {
+        position: absolute;
+        left: 50%;
+        margin-left: -5px;
+        width: 10px;
+        height: 10px;
+        background: var(--surface-2);
+        transform: rotate(45deg);
+      }
+      .tip-top .tip-caret {
+        bottom: -5px;
+        border-right: 1px solid var(--line-strong);
+        border-bottom: 1px solid var(--line-strong);
+      }
+      .tip-bottom .tip-caret {
+        top: -5px;
+        border-left: 1px solid var(--line-strong);
+        border-top: 1px solid var(--line-strong);
+      }
 
-// bold the first clause of the summary (the verdict) as the lead
-function leadify(r){
-  const s = r.summary||"";
-  const i = s.indexOf(",");
-  if(i<0) return `<span class="lead">${esc(s)}</span>`;
-  return `<span class="lead">${esc(s.slice(0,i))}</span>${esc(s.slice(i))}`;
-}
+      @media (prefers-reduced-motion: reduce) {
+        .status-dot.fresh,
+        .chart-loading,
+        .skeleton-bar,
+        .chip-skel {
+          animation: none;
+        }
+        .card.ready:hover {
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
 
-function setStatus(updatedAt){
-  const el=document.getElementById("status"), txt=document.getElementById("statusText");
-  const age = Date.now()-Date.parse(updatedAt);
-  el.className="status";
-  if(isNaN(age)){ txt.textContent="updated · unknown"; return; }
-  if(age>STALE_MS){ el.classList.add("stale"); txt.textContent="stale · "+relTime(updatedAt); }
-  else{ el.classList.add("fresh"); txt.textContent=relTime(updatedAt); }
-}
+    <script>
+      (function () {
+        "use strict";
 
-function renderEmpty(msg){
-  document.getElementById("grid").innerHTML =
-    `<div class="empty"><div class="big">Nothing to show yet</div>${esc(msg)}</div>`;
-  const el=document.getElementById("status"); el.className="status";
-  document.getElementById("statusText").textContent="no data";
-}
+        var DATA_URL = "./public/data.json";
 
-function render(data){
-  const coins = data && data.coins;
-  if(!coins || !Object.keys(coins).length){
-    renderEmpty("Criptis writes this file each time its watcher runs, every couple of hours.");
-    return;
-  }
-  setStatus(data.updatedAt);
-  document.getElementById("grid").innerHTML =
-    Object.entries(coins).map(([id,c])=>card(id, c||{})).join("");
-}
+        /* ---- coin registry ---- */
+        var COIN_ORDER = [
+          "bitcoin",
+          "ethereum",
+          "solana",
+          "ripple",
+          "dogecoin",
+          "cardano",
+        ];
+        var COIN_META = {
+          bitcoin: { sym: "BTC", name: "Bitcoin" },
+          ethereum: { sym: "ETH", name: "Ethereum" },
+          solana: { sym: "SOL", name: "Solana" },
+          ripple: { sym: "XRP", name: "XRP" },
+          dogecoin: { sym: "DOGE", name: "Dogecoin" },
+          cardano: { sym: "ADA", name: "Cardano" },
+        };
+        function metaFor(id) {
+          return (
+            COIN_META[id] || {
+              sym: String(id).slice(0, 4).toUpperCase(),
+              name: String(id).charAt(0).toUpperCase() + String(id).slice(1),
+            }
+          );
+        }
 
-async function load(){
-  try{
-    const res = await fetch(DATA_URL, {cache:"no-store"});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    render(await res.json());
-  }catch(err){
-    // SW may still serve a cached copy offline; only show empty if nothing rendered yet
-    if(!document.querySelector(".card")){
-      renderEmpty("Couldn't reach the data file ("+esc(err.message)+"). It'll appear once published.");
-    }
-  }
-}
+        /* ---- glossary (plain-language, descriptive; never predictive) ---- */
+        var GLOSSARY = {
+          trend: {
+            label: "Trend",
+            body: "The overall read: which way price is leaning and how convincing it is — e.g. \u201CDowntrend, moderate.\u201D The strength word comes from how cleanly the move fits a straight line, not from how far it's gone.",
+          },
+          rsi: {
+            label: "RSI",
+            body: "Relative Strength Index \u2014 a 0\u2013100 gauge of how hard price has been pushed lately. Above 70 it has run hot, below 30 it has run cold. It describes the recent push; it doesn't predict the next one.",
+          },
+          r2: {
+            label: "R\u00B2 (trend cleanness)",
+            body: "How tidily price sits on a straight line. 1.0 is a ruler-clean trend; near 0 is mostly noise. It tells you how clean the move is \u2014 not which direction it's heading.",
+          },
+          band: {
+            label: "Band position",
+            body: "Where price sits inside its recent low-to-high envelope (the Bollinger band). 0% hugs the floor, 100% hugs the ceiling. Past either end means the move is stretched beyond its usual range.",
+          },
+          momentum: {
+            label: "Momentum",
+            body: "The average pace of the move \u2014 roughly how many percent price is drifting each hour. A bigger number is a faster move; the sign tells you the direction. It measures speed, not a target.",
+          },
+          volume: {
+            label: "Volume trend",
+            body: "Whether trading activity is picking up or fading versus its own recent average. Rising volume backs a move and makes it look more real; easing volume makes the same move look thinner.",
+          },
+        };
+        var SHORT_LABEL = {
+          trend: "TREND",
+          rsi: "RSI",
+          r2: "R\u00B2",
+          band: "BAND",
+          momentum: "MOM",
+          volume: "VOL",
+        };
 
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
-}
-load();
-setInterval(load, REFRESH_MS);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden) load(); });
-</script>
-</body>
+        /* ---- tiny DOM helper ---- */
+        function el(tag, props, children) {
+          var n = document.createElement(tag);
+          props = props || {};
+          for (var k in props) {
+            if (!Object.prototype.hasOwnProperty.call(props, k)) continue;
+            var v = props[k];
+            if (v == null) continue;
+            if (k === "class") n.className = v;
+            else if (k === "style") n.setAttribute("style", v);
+            else if (k === "html") n.innerHTML = v;
+            else if (k === "text") n.textContent = v;
+            else n.setAttribute(k, v);
+          }
+          if (children != null) {
+            if (!Array.isArray(children)) children = [children];
+            for (var i = 0; i < children.length; i++) {
+              var c = children[i];
+              if (c == null) continue;
+              n.appendChild(
+                typeof c === "string" || typeof c === "number"
+                  ? document.createTextNode(String(c))
+                  : c,
+              );
+            }
+          }
+          return n;
+        }
+
+        /* ---- formatters (ported from Criptis source) ---- */
+        function fmtPrice(n) {
+          if (typeof n !== "number" || !isFinite(n)) return "\u2014";
+          if (n >= 1000)
+            return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+          if (n >= 1)
+            return n.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 4,
+            });
+          return n.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 6,
+          });
+        }
+        function relTime(iso, now) {
+          now = now || Date.now();
+          var t = typeof iso === "number" ? iso : Date.parse(iso);
+          if (isNaN(t)) return "unknown";
+          var m = Math.max(0, Math.round((now - t) / 60000));
+          if (m < 1) return "just now";
+          if (m < 60) return m + "m ago";
+          var h = Math.floor(m / 60),
+            mm = m % 60;
+          return mm ? h + "h " + mm + "m ago" : h + "h ago";
+        }
+        function dirColor(d) {
+          return d === "up"
+            ? "var(--up)"
+            : d === "down"
+              ? "var(--down)"
+              : "var(--neutral)";
+        }
+        function cleanColor(c) {
+          return c === "clean"
+            ? "var(--amber)"
+            : c === "moderate"
+              ? "var(--dim)"
+              : "var(--faint)";
+        }
+
+        /* ---- tooltip ---- */
+        function tip(trigger, opts) {
+          opts = opts || {};
+          var placement = opts.placement || "top";
+          var wrap = el("span", { class: "tip-wrap" });
+          wrap.appendChild(trigger);
+          var bubble = el("span", {
+            class: "tip-bubble tip-" + placement,
+            role: "tooltip",
+          });
+          if (opts.title)
+            bubble.appendChild(
+              el("span", { class: "tip-title", text: opts.title }),
+            );
+          bubble.appendChild(
+            el("span", { class: "tip-body", text: opts.body || "" }),
+          );
+          bubble.appendChild(
+            el("span", { class: "tip-caret", "aria-hidden": "true" }),
+          );
+          wrap.appendChild(bubble);
+          wrap.addEventListener("pointerup", function (e) {
+            if (e.pointerType === "mouse") return;
+            e.preventDefault();
+            wrap.classList.toggle("open");
+          });
+          return wrap;
+        }
+
+        var HELP_DOT =
+          '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.2"/><path d="M8 7.1v3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="5.2" r="0.85" fill="currentColor"/></svg>';
+        var NODATA_ICON =
+          '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.2"/><path d="M5.6 5.6l4.8 4.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+
+        /* ---- logo ---- */
+        function logoMark(size) {
+          return (
+            '<svg width="' +
+            size +
+            '" height="' +
+            size +
+            '" viewBox="0 0 48 48" fill="none" aria-hidden="true">' +
+            '<line x1="13" y1="14" x2="13" y2="38" stroke="var(--amber-dim)" stroke-width="2.4" stroke-linecap="round"/>' +
+            '<rect x="9" y="18" width="8" height="16" rx="4" fill="var(--amber-dim)"/>' +
+            '<line x1="24" y1="6" x2="24" y2="42" stroke="var(--amber)" stroke-width="2.6" stroke-linecap="round"/>' +
+            '<rect x="19.5" y="11" width="9" height="26" rx="4.5" fill="var(--amber)"/>' +
+            '<line x1="35" y1="17" x2="35" y2="34" stroke="var(--amber-dim)" stroke-width="2.2" stroke-linecap="round"/>' +
+            '<rect x="31" y="20" width="8" height="12" rx="4" fill="var(--amber-dim)"/></svg>'
+          );
+        }
+        function logo(size) {
+          size = size || 22;
+          var s = el("span", { class: "logo" });
+          s.appendChild(el("span", { html: logoMark(size) }));
+          s.appendChild(
+            el("span", {
+              class: "logo-word",
+              html: 'Crip<span class="amber">tis</span>',
+            }),
+          );
+          return s;
+        }
+
+        /* ---- status indicator ---- */
+        function statusIndicator(updatedAt, state, now) {
+          now = now || Date.now();
+          var staleMs = 2.5 * 3600000;
+          var s = state;
+          if (!s) {
+            var age =
+              now -
+              (typeof updatedAt === "number"
+                ? updatedAt
+                : Date.parse(updatedAt));
+            if (isNaN(age)) s = "loading";
+            else if (age > staleMs) s = "stale";
+            else s = "fresh";
+          }
+          var text =
+            s === "loading"
+              ? "loading\u2026"
+              : s === "stale"
+                ? "stale \u00B7 " + relTime(updatedAt, now)
+                : relTime(updatedAt, now);
+          var wrap = el("span", {
+            class: "status" + (s === "stale" ? " stale" : ""),
+            "aria-live": "polite",
+          });
+          wrap.appendChild(el("span", { class: "status-dot " + s }));
+          wrap.appendChild(el("span", { class: "num", text: text }));
+          return wrap;
+        }
+
+        /* ---- app header ---- */
+        function appHeader(updatedAt, state, now) {
+          var h = el("header", { class: "app-header" });
+          h.appendChild(logo(22));
+          var trigger = el(
+            "span",
+            { class: "tip-trigger", tabindex: "0" },
+            statusIndicator(updatedAt, state, now),
+          );
+          h.appendChild(
+            tip(trigger, {
+              title: "Last updated",
+              body: "When the watcher last wrote fresh data. Criptis re-reads the market about every 2 hours; after one missed cycle the status turns stale.",
+              placement: "bottom",
+            }),
+          );
+          return h;
+        }
+
+        /* ---- price chart (line; candlestick-ready) ---- */
+        function linePaths(values, w, h, pad) {
+          pad = pad || 4;
+          var v = values.filter(function (x) {
+            return typeof x === "number" && isFinite(x);
+          });
+          if (v.length < 2) return null;
+          var lo = Math.min.apply(null, v),
+            hi = Math.max.apply(null, v);
+          if (lo === hi) {
+            lo -= 1;
+            hi += 1;
+          }
+          var x = function (i) {
+            return pad + (i * (w - 2 * pad)) / (v.length - 1);
+          };
+          var y = function (p) {
+            return pad + ((hi - p) * (h - 2 * pad)) / (hi - lo);
+          };
+          var pts = v.map(function (p, i) {
+            return [x(i), y(p)];
+          });
+          var line =
+            "M" +
+            pts
+              .map(function (p) {
+                return p[0].toFixed(1) + " " + p[1].toFixed(1);
+              })
+              .join(" L ");
+          var area =
+            line +
+            " L " +
+            pts[pts.length - 1][0].toFixed(1) +
+            " " +
+            h +
+            " L " +
+            pts[0][0].toFixed(1) +
+            " " +
+            h +
+            " Z";
+          return { line: line, area: area, last: pts[pts.length - 1] };
+        }
+        function baselineSvg(w, h) {
+          return (
+            '<svg viewBox="0 0 ' +
+            w +
+            " " +
+            h +
+            '" preserveAspectRatio="none" class="chart" aria-hidden="true">' +
+            '<line x1="4" y1="' +
+            h / 2 +
+            '" x2="' +
+            (w - 4) +
+            '" y2="' +
+            h / 2 +
+            '" stroke="var(--ghost)" stroke-width="1.4" stroke-dasharray="3 5" vector-effect="non-scaling-stroke"/></svg>'
+          );
+        }
+        function priceChart(series, direction, state) {
+          var W = 300,
+            H = 62;
+          var dir =
+            direction === "up" || direction === "down" || direction === "flat"
+              ? direction
+              : "flat";
+          var stroke =
+            dir === "up"
+              ? "var(--up)"
+              : dir === "down"
+                ? "var(--down)"
+                : "var(--neutral)";
+          if (state === "loading")
+            return el("div", { class: "chart-loading", "aria-hidden": "true" });
+          if (state === "unavailable")
+            return el("div", { class: "chart-wrap", html: baselineSvg(W, H) });
+          var vals = (series || []).map(function (p) {
+            return typeof p === "number" ? p : p && p.p;
+          });
+          var paths = linePaths(vals, W, H);
+          if (!paths)
+            return el("div", { class: "chart-wrap", html: baselineSvg(W, H) });
+          var svg =
+            '<svg viewBox="0 0 ' +
+            W +
+            " " +
+            H +
+            '" preserveAspectRatio="none" class="chart" aria-hidden="true">' +
+            '<path d="' +
+            paths.area +
+            '" fill="' +
+            stroke +
+            '" opacity="0.13"/>' +
+            '<path d="' +
+            paths.line +
+            '" fill="none" stroke="' +
+            stroke +
+            '" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>' +
+            '<circle cx="' +
+            paths.last[0].toFixed(1) +
+            '" cy="' +
+            paths.last[1].toFixed(1) +
+            '" r="2.6" fill="' +
+            stroke +
+            '" stroke="var(--bg)" stroke-width="1.5"/></svg>';
+          return el("div", { class: "chart-wrap", html: svg });
+        }
+
+        /* ---- rsi gauge ---- */
+        function rsiGauge(value) {
+          var pos = Math.max(2, Math.min(98, value));
+          var markColor =
+            value <= 30
+              ? "var(--up)"
+              : value >= 70
+                ? "var(--down)"
+                : "var(--amber)";
+          return el("span", {
+            class: "rsi-gauge",
+            "aria-hidden": "true",
+            html:
+              '<span class="rsi-zone rsi-low"></span><span class="rsi-zone rsi-high"></span>' +
+              '<span class="rsi-mark" style="left:' +
+              pos +
+              "%;background:" +
+              markColor +
+              '"></span>',
+          });
+        }
+
+        /* ---- indicator chip ---- */
+        function indicatorChip(o) {
+          var term = o.term,
+            entry = term ? GLOSSARY[term] : null;
+          var explain = o.explain !== false;
+          var keyText =
+            o.label ||
+            SHORT_LABEL[term] ||
+            (entry && entry.label) ||
+            term ||
+            "";
+          var chip = el("span", { class: "chip" + (o.block ? " block" : "") });
+
+          if (o.state === "loading") {
+            chip.appendChild(
+              el("span", {
+                class: "chip-key",
+                style: "color:var(--ghost)",
+                text: keyText || "\u2014",
+              }),
+            );
+            chip.appendChild(el("span", { class: "chip-skel" }));
+            return chip;
+          }
+          if (o.state === "unavailable") {
+            chip.classList.add("unavailable");
+            chip.appendChild(el("span", { class: "chip-key", text: keyText }));
+            chip.appendChild(el("span", { class: "chip-val", text: "\u2014" }));
+            return chip;
+          }
+
+          var keySpan = el("span", {
+            class: "chip-key" + (entry && explain ? " tip-trigger" : ""),
+            text: keyText,
+          });
+          var keyNode;
+          if (entry && explain) {
+            keySpan.setAttribute("tabindex", "0");
+            keyNode = tip(keySpan, {
+              title: entry.label,
+              body: entry.body,
+              placement: "top",
+            });
+          } else {
+            keyNode = keySpan;
+          }
+
+          var tone = o.tone || "neutral";
+          var valEl = el("span", {
+            class:
+              "chip-val" +
+              (tone === "pos" ? " pos" : tone === "neg" ? " neg" : ""),
+          });
+          if (o.value != null) {
+            if (typeof o.value === "object" && o.value.nodeType)
+              valEl.appendChild(o.value);
+            else valEl.appendChild(document.createTextNode(String(o.value)));
+          }
+          if (o.gauge != null) valEl.appendChild(rsiGauge(o.gauge));
+
+          chip.appendChild(keyNode);
+          chip.appendChild(valEl);
+          return chip;
+        }
+
+        /* ---- trend chip value (two-tone: direction + cleanliness) ---- */
+        function trendValue(r) {
+          var arrow =
+            r.direction === "up"
+              ? "\u2191"
+              : r.direction === "down"
+                ? "\u2193"
+                : "\u2192";
+          var dirWord = r.direction === "flat" ? "flat" : r.direction;
+          var span = el("span");
+          span.appendChild(
+            el("span", {
+              style: "color:" + dirColor(r.direction),
+              text: arrow + " " + dirWord,
+            }),
+          );
+          if (r.direction !== "flat" && r.cleanliness) {
+            span.appendChild(
+              el("span", {
+                style: "color:" + cleanColor(r.cleanliness),
+                text: ", " + r.cleanliness,
+              }),
+            );
+          }
+          return span;
+        }
+
+        function chipsFromReadout(r) {
+          if (!r) return [];
+          var out = [];
+          out.push(
+            indicatorChip({ term: "trend", value: trendValue(r), block: true }),
+          );
+          if (typeof r.rsi === "number")
+            out.push(
+              indicatorChip({
+                term: "rsi",
+                value: Math.round(r.rsi),
+                gauge: r.rsi,
+                block: true,
+              }),
+            );
+          if (typeof r.pctB === "number") {
+            var b = Math.round(r.pctB * 100);
+            out.push(
+              indicatorChip({
+                term: "band",
+                value: b + "%",
+                tone: b > 100 ? "neg" : b < 0 ? "pos" : "neutral",
+                block: true,
+              }),
+            );
+          }
+          if (typeof r.momentumPctPerStep === "number") {
+            var m = r.momentumPctPerStep;
+            out.push(
+              indicatorChip({
+                term: "momentum",
+                value: (m > 0 ? "+" : "") + m.toFixed(2) + "%/hr",
+                tone: m > 0 ? "pos" : m < 0 ? "neg" : "neutral",
+                block: true,
+              }),
+            );
+          }
+          if (r.volume && typeof r.volume.rising === "boolean")
+            out.push(
+              indicatorChip({
+                term: "volume",
+                value: r.volume.rising ? "rising" : "easing",
+                block: true,
+              }),
+            );
+          return out;
+        }
+
+        /* ---- readout block (verdict lead + supporting detail) ---- */
+        function readoutBlock(r) {
+          var s = r.summary || "";
+          var i = s.indexOf(",");
+          var lead = i < 0 ? s : s.slice(0, i);
+          var rest = i < 0 ? "" : s.slice(i + 1).trim();
+          if (rest) rest = rest.charAt(0).toUpperCase() + rest.slice(1);
+
+          var block = el("div", { class: "readout" });
+          var leadSpan = el("strong", {
+            class: "readout-lead tip-trigger",
+            style: "color:" + dirColor(r.direction),
+            tabindex: "0",
+            text: lead,
+          });
+          leadSpan.insertAdjacentHTML("beforeend", HELP_DOT);
+          var leadWrap = tip(leadSpan, {
+            title: GLOSSARY.trend.label,
+            body: GLOSSARY.trend.body,
+            placement: "top",
+          });
+          block.appendChild(el("div", {}, leadWrap));
+          if (rest)
+            block.appendChild(el("div", { class: "readout-rest", text: rest }));
+          return block;
+        }
+
+        /* ---- price element ---- */
+        function priceEl(price, state) {
+          var p = el("div", { class: "price" });
+          p.appendChild(el("span", { class: "cur", text: "$" }));
+          if (state === "loading")
+            p.appendChild(el("span", { class: "ghost", text: "\u2014" }));
+          else p.appendChild(document.createTextNode(fmtPrice(price)));
+          return p;
+        }
+
+        /* ---- coin card ---- */
+        function cardHead(sym, name, price, state) {
+          return el("div", { class: "card-head" }, [
+            el("div", {}, [
+              el("div", { class: "ticker", text: sym }),
+              el("div", { class: "coin-name", text: name }),
+            ]),
+            priceEl(price, state),
+          ]);
+        }
+        function bar(w) {
+          return el("span", { class: "skeleton-bar", style: "width:" + w });
+        }
+
+        function coinCard(c) {
+          var state = c.state || "ready";
+          var readout = c.readout || null;
+
+          if (state === "loading") {
+            var lc = el("section", {
+              class: "card loading",
+              "aria-busy": "true",
+            });
+            lc.appendChild(cardHead(c.sym, c.name, c.price, "loading"));
+            lc.appendChild(
+              el("div", { class: "skel-read" }, [bar("90%"), bar("60%")]),
+            );
+            lc.appendChild(priceChart(null, "flat", "loading"));
+            lc.appendChild(
+              el("div", { class: "skel-chips" }, [
+                bar("54px"),
+                bar("70px"),
+                bar("48px"),
+              ]),
+            );
+            return lc;
+          }
+
+          if (state === "unavailable" || !readout) {
+            var uc = el("section", { class: "card unavailable" });
+            uc.appendChild(cardHead(c.sym, c.name, c.price, "ready"));
+            var nd = el("div", { class: "no-data" });
+            nd.insertAdjacentHTML("afterbegin", NODATA_ICON);
+            nd.appendChild(
+              document.createTextNode(
+                "Readout unavailable \u2014 data didn't come through this cycle.",
+              ),
+            );
+            uc.appendChild(nd);
+            uc.appendChild(priceChart(null, "flat", "unavailable"));
+            return uc;
+          }
+
+          var card = el("section", { class: "card ready" });
+          card.appendChild(cardHead(c.sym, c.name, c.price, "ready"));
+          card.appendChild(readoutBlock(readout));
+          card.appendChild(
+            priceChart(c.series, readout.direction || "flat", "ready"),
+          );
+          card.appendChild(
+            el("div", { class: "chips" }, chipsFromReadout(readout)),
+          );
+          return card;
+        }
+
+        /* ---- adapter: live data.json -> card models ---- */
+        function normSeries(series) {
+          if (!Array.isArray(series)) return [];
+          var out = [];
+          for (var i = 0; i < series.length; i++) {
+            var pt = series[i];
+            if (typeof pt === "number") {
+              if (isFinite(pt)) out.push({ p: pt });
+            } else if (pt && typeof pt.p === "number" && isFinite(pt.p))
+              out.push({ p: pt.p });
+          }
+          return out;
+        }
+        function adapt(data) {
+          var updatedAt = data && data.updatedAt;
+          var coins = [];
+          if (data && data.coins && !Array.isArray(data.coins)) {
+            var ids = Object.keys(data.coins);
+            var known = COIN_ORDER.filter(function (id) {
+              return ids.indexOf(id) !== -1;
+            });
+            var extra = ids.filter(function (id) {
+              return COIN_ORDER.indexOf(id) === -1;
+            });
+            var ordered = known.concat(extra);
+            coins = ordered.map(function (id) {
+              var c = data.coins[id] || {};
+              var meta = metaFor(id);
+              var hasPrice = typeof c.price === "number" && isFinite(c.price);
+              return {
+                sym: meta.sym,
+                name: meta.name,
+                price: hasPrice ? c.price : undefined,
+                readout: c.readout || null,
+                series: normSeries(c.series),
+                state: !c.readout ? "unavailable" : "ready",
+              };
+            });
+          } else if (Array.isArray(data)) {
+            coins = data.map(function (c) {
+              return {
+                sym: c.sym,
+                name: c.name,
+                price: c.price,
+                readout: c.readout || null,
+                series: normSeries(c.series),
+                state: c.state || (c.readout ? "ready" : "unavailable"),
+              };
+            });
+          } else if (data && Array.isArray(data.coins)) {
+            coins = data.coins.map(function (c) {
+              return {
+                sym: c.sym,
+                name: c.name,
+                price: c.price,
+                readout: c.readout || null,
+                series: normSeries(c.series),
+                state: c.state || (c.readout ? "ready" : "unavailable"),
+              };
+            });
+          }
+          return { coins: coins, updatedAt: updatedAt };
+        }
+
+        /* ---- render ---- */
+        function renderApp(model, mount) {
+          var coins = model.coins || [];
+          mount.textContent = "";
+          var wrap = el("div", { class: "wrap" });
+          wrap.appendChild(
+            appHeader(model.updatedAt, model.status, Date.now()),
+          );
+          var grid = el("main", {
+            class: "grid",
+            "aria-label": "Coin readouts",
+          });
+          for (var i = 0; i < coins.length; i++)
+            grid.appendChild(coinCard(coins[i]));
+          wrap.appendChild(grid);
+          var footer = el(
+            "footer",
+            { class: "footer" },
+            el("span", {
+              text: "Descriptive readout \u2014 not financial advice.",
+            }),
+          );
+          wrap.appendChild(footer);
+          mount.appendChild(wrap);
+        }
+
+        function placeholderCoins(state) {
+          return COIN_ORDER.slice(0, 5).map(function (id) {
+            var meta = metaFor(id);
+            return {
+              sym: meta.sym,
+              name: meta.name,
+              state: state,
+              readout: null,
+              series: [],
+            };
+          });
+        }
+
+        /* ---- boot ---- */
+        function boot() {
+          var mount = document.getElementById("app");
+          renderApp(
+            {
+              coins: placeholderCoins("loading"),
+              updatedAt: undefined,
+              status: "loading",
+            },
+            mount,
+          );
+
+          fetch(DATA_URL, { cache: "no-store" })
+            .then(function (r) {
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              return r.json();
+            })
+            .then(function (data) {
+              var m = adapt(data);
+              m.status = undefined;
+              renderApp(m, mount);
+            })
+            .catch(function (err) {
+              if (typeof console !== "undefined")
+                console.warn("Criptis: data load failed", err);
+              renderApp(
+                {
+                  coins: placeholderCoins("unavailable"),
+                  updatedAt: undefined,
+                  status: "loading",
+                },
+                mount,
+              );
+            });
+
+          document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape") {
+              var open = document.querySelectorAll(".tip-wrap.open");
+              for (var i = 0; i < open.length; i++)
+                open[i].classList.remove("open");
+            }
+          });
+          document.addEventListener(
+            "pointerdown",
+            function (e) {
+              var open = document.querySelectorAll(".tip-wrap.open");
+              for (var i = 0; i < open.length; i++) {
+                if (!open[i].contains(e.target))
+                  open[i].classList.remove("open");
+              }
+            },
+            true,
+          );
+        }
+
+        /* expose for testing + boot */
+        window.Criptis = {
+          boot: boot,
+          adapt: adapt,
+          renderApp: renderApp,
+          coinCard: coinCard,
+          chipsFromReadout: chipsFromReadout,
+          priceChart: priceChart,
+          fmtPrice: fmtPrice,
+          relTime: relTime,
+        };
+
+        if (!window.__CRIPTIS_NO_AUTOBOOT) {
+          if (document.readyState === "loading")
+            document.addEventListener("DOMContentLoaded", boot);
+          else boot();
+        }
+
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker.register("./sw.js").catch(function () {});
+          });
+        }
+      })();
+    </script>
+  </body>
 </html>
