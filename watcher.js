@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Criptis — crypto price watcher. Runs on GitHub Actions every 2h, alerts via Resend email.
+// Criptis — crypto price watcher. Runs on GitHub Actions every 1h, alerts via Resend email.
 // Deterministic triggers decide WHEN to alert; the LLM only writes the analysis paragraph.
 
 import fs from "node:fs";
@@ -16,7 +16,7 @@ const STATE_PATH = path.join(__dirname, "state.json");
 const DATA_PATH = path.join(__dirname, "public", "data.json");
 const PROMPT_PATH = path.join(__dirname, "prompts", "analysis.md");
 
-const HISTORY_LIMIT = 24; // price points kept per coin (~48h at a 2h cadence)
+const HISTORY_LIMIT = 48; // price points kept per coin (~48h at a 1h cadence)
 const HOUR = 3_600_000;
 const DRIFT_MIN_AGE_HOURS = 18; // youngest point allowed as the "~24h ago" reference
 const DRIFT_REARM = 0.8; // drift-latch hysteresis: re-arm once |drift| eases below threshold*this (1.0 = none)
@@ -185,7 +185,7 @@ async function analyze(alerts) {
         `current: ${fmtPrice(a.price)} (${fmtPct(a.changePct)} since last check${drift})`,
         `triggered by: ${a.reasons.join("; ")}`,
         indicators,
-        `price history, oldest first (~2h between points):`,
+        `price history, oldest first (~1h between points):`,
         lines,
       ].join("\n");
     })
@@ -227,8 +227,8 @@ async function analyze(alerts) {
 
 function headline(a) {
   // Lead with whichever signal is largest in magnitude: a slow 24h bleed or a
-  // multi-check trend can matter more than the latest 2h tick (which may be ~0).
-  const candidates = [{ move: a.changePct, window: "2h" }];
+  // multi-check trend can matter more than the latest 1h tick (which may be ~0).
+  const candidates = [{ move: a.changePct, window: "1h" }];
   if (a.driftPct !== null) candidates.push({ move: a.driftPct, window: "24h" });
   if (a.streak) candidates.push({ move: a.streak.netPct, window: `${a.streak.len}-check trend` });
   const top = candidates.reduce((b, c) => (Math.abs(c.move) > Math.abs(b.move) ? c : b));
@@ -263,7 +263,7 @@ const esc = (s) =>
 
 // QuickChart line-chart image of the stored price history. Decorative only — if
 // QuickChart is unreachable the <img> just doesn't render and the card's numbers
-// still carry the alert. Criptis stores one close per ~2h, so this is a sparkline,
+// still carry the alert. Criptis stores one close per ~1h, so this is a sparkline,
 // not candlesticks. Green when the window is net-up, Binance-red when net-down.
 function chartUrl(a) {
   const pts = a.history;
@@ -330,7 +330,7 @@ function readoutHtml(r) {
 // for clients that block HTML or images.
 function buildHtml(alerts, analysis) {
   const cards = alerts.map((a) => {
-    const pills = [pill(a.changePct, "2h")];
+    const pills = [pill(a.changePct, "1h")];
     if (a.driftPct !== null) pills.push(pill(a.driftPct, "24h"));
     if (a.streak) pills.push(pill(a.streak.netPct, `${a.streak.len}-check`));
     return `
@@ -454,12 +454,12 @@ async function main() {
     entry.lastDriftDir = driftDir;
 
     // Trend streak: N checks in a row moving the same way. Catches a slow, steady
-    // grind where each ~2h step stays under changeThresholdPct yet never reverses.
+    // grind where each ~1h step stays under changeThresholdPct yet never reverses.
     // Re-fires every streakLength checks the run keeps going (len 5, 10, 15, …) so a
     // trend that holds its direction keeps alerting, not just on the first crossing.
     // A reversal or a flat tick resets the run, and the next alert waits a fresh N
     // steps. (history caps at HISTORY_LIMIT, so on a very long run len tops out there
-    // and the last few multiples can't be reached — a >~40h one-way grind is rare.)
+    // and the last few multiples can't be reached — a >~45h one-way grind is rare.)
     let streakInfo = null;
     const streak = trendStreak(history, price);
     if (streakLength >= 2 && streak.len > 0 && streak.len % streakLength === 0) {

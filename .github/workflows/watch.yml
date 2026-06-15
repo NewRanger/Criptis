@@ -2,9 +2,9 @@ name: Criptis watch
 
 on:
   schedule:
-    # Every 2 hours. Off the top of the hour — GitHub delays/skips runs
+    # Every hour. Off the top of the hour — GitHub delays/skips runs
     # scheduled at :00 under load.
-    - cron: "13 */2 * * *"
+    - cron: "13 * * * *"
   workflow_dispatch:
 
 permissions:

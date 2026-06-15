@@ -2,15 +2,15 @@
 
 Crypto price watcher that runs entirely on GitHub Actions — no server, no local cron.
 
-Every 2 hours a workflow runs `watcher.js`, which fetches prices from CoinGecko, compares them against the committed `state.json`, and **only when a deterministic trigger fires** calls the Anthropic API for a one-paragraph analysis and emails you via Resend. The LLM is never the polling loop — it only writes the analysis after a trigger.
+Every hour a workflow runs `watcher.js`, which fetches prices from CoinGecko, compares them against the committed `state.json`, and **only when a deterministic trigger fires** calls the Anthropic API for a one-paragraph analysis and emails you via Resend. The LLM is never the polling loop — it only writes the analysis after a trigger.
 
 ## How it works
 
 ```
-GitHub Actions (cron */2h)
+GitHub Actions (cron hourly)
   └─ watcher.js
        ├─ fetch prices (CoinGecko, free, no key; retry once → exit 1)
-       ├─ load state.json, keep last 24 price points per coin (~48h)
+       ├─ load state.json, keep last 48 price points per coin (~48h)
        ├─ trigger if:
        │    • change since last check  > 1.5%  (changeThresholdPct)
        │    • drift vs ~24h ago        > 4%   (driftThresholdPct, slow-bleed)

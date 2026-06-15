@@ -791,7 +791,7 @@
         /* ---- status indicator ---- */
         function statusIndicator(updatedAt, state, now) {
           now = now || Date.now();
-          var staleMs = 2.5 * 3600000;
+          var staleMs = 1.5 * 3600000;
           var s = state;
           if (!s) {
             var age =
@@ -830,7 +830,7 @@
           h.appendChild(
             tip(trigger, {
               title: "Last updated",
-              body: "When the watcher last wrote fresh data. Criptis re-reads the market about every 2 hours; after one missed cycle the status turns stale.",
+              body: "When the watcher last wrote fresh data. Criptis re-reads the market about every hour; after one missed cycle the status turns stale.",
               placement: "bottom",
             }),
           );
