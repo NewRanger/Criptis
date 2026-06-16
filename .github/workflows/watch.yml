@@ -30,6 +30,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Alert recipients (comma-separated) — kept out of the committed config.
+          ALERT_RECIPIENTS: ${{ secrets.ALERT_RECIPIENTS }}
           # Prices come from Coinbase (no key). CryptoPanic news is optional —
           # absent secret => the run continues with no news.
           CRYPTOPANIC_API_KEY: ${{ secrets.CRYPTOPANIC_API_KEY }}

@@ -44,7 +44,7 @@ The UI is purely **descriptive — never advisory**, in Georgian for a complete 
 1. Create a free account at [resend.com](https://resend.com).
 2. **API Keys → Create API Key** — copy the `re_...` key.
 3. Sender address: the default `onboarding@resend.dev` works out of the box, but Resend only delivers it to **your own account email**. To send to any address, verify a domain under **Domains** and change `email.from` in `config.json` to something like `Criptis <alerts@yourdomain.com>`.
-4. Put the recipient(s) in `config.json` → `email.to` (a string or an array). **Order matters:** the watcher sends one email to all recipients at once, and if that send fails it automatically retries to `email.to[0]` **alone** — so list the Resend **account-owner** address first. (That retry is the safety net for the `onboarding@resend.dev` sender, which rejects the whole send if any recipient isn't the account owner.)
+4. Set the recipient(s) via the **`ALERT_RECIPIENTS`** env var — a comma-separated list (e.g. `you@example.com,friend@example.com`) — so personal addresses stay out of the committed `config.json`. In CI it's a repo secret (see §4); locally, export it before a real run. `config.json` → `email.to` is an optional fallback if the env var is unset. **Order matters:** the watcher sends one email to all recipients at once, and if that send fails it retries to the **first** recipient **alone** — so list the Resend **account-owner** address first. (That retry is the safety net for the `onboarding@resend.dev` sender, which rejects the whole send if any recipient isn't the account owner.)
 
 ### 2. Anthropic
 
@@ -61,10 +61,11 @@ In the GitHub repo: **Settings → Secrets and variables → Actions → New rep
 | Secret | Value |
 |---|---|
 | `RESEND_API_KEY` | your `re_...` key |
+| `ALERT_RECIPIENTS` | comma-separated alert recipients (e.g. `you@example.com,friend@example.com`) |
 | `ANTHROPIC_API_KEY` | your `sk-ant-...` key |
 | `CRYPTOPANIC_API_KEY` | your CryptoPanic auth token (optional) |
 
-Never put keys in `config.json` — it's committed.
+Never put keys or personal recipient addresses in `config.json` — it's committed.
 
 ### 5. Enable the workflow
 
@@ -91,7 +92,7 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
 - **changeThresholdPct** — alert when the move since the last check (~2h) exceeds this. Lower = noisier.
 - **driftThresholdPct** — alert when the price has drifted this far from ~24h ago, even if each 2h step was small. Catches slow bleeds.
 - **streakLength** — alert when this many checks in a row (~2h each) move the same direction, even if no single step or the 24h drift crossed a threshold. Catches a steady grind. Fires once when the streak forms, then stays quiet until it breaks. Default 5 (~10h); set higher to require a longer trend.
-- **email.to** — recipient(s); a string or an array. List the Resend **account-owner** address **first** — on a send failure the watcher falls back to `email.to[0]` only (see Setup §1).
+- **email.to** — optional fallback recipient(s) (a string or an array) used only when the `ALERT_RECIPIENTS` env var is unset. Prefer `ALERT_RECIPIENTS` (see Setup §1) so addresses aren't committed; if you do list any here, put the Resend **account-owner** address **first**.
 - **email.from** — sender; must be `onboarding@resend.dev` or an address on a domain you've verified in Resend.
 
 ## Local testing

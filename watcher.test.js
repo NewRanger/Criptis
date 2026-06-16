@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   derivePrices, driftDecision, summaryHtml, summaryToText, toPublicPatterns,
-  evaluatePatternAlert, explainPatternAlert, buildBody, buildHtml,
+  evaluatePatternAlert, explainPatternAlert, buildBody, buildHtml, headline, resolveRecipients,
 } from "./watcher.js";
 import { ascendingTriangle } from "./patterns/fixtures/synth.js";
 
@@ -190,6 +190,22 @@ test("evaluatePatternAlert returns the HIGHEST-confidence eligible pattern", () 
   assert.equal(evaluatePatternAlert([lo, hi], {}, ENABLED, 1000).patternName, "Hi");
 });
 
+// --- recipient resolution (env-based, no personal addresses committed) -------
+
+test("resolveRecipients reads ALERT_RECIPIENTS (comma-separated, trimmed, de-duped), else falls back to config", () => {
+  const saved = process.env.ALERT_RECIPIENTS;
+  try {
+    process.env.ALERT_RECIPIENTS = " a@x.com , b@x.com ,, a@x.com ";
+    assert.deepEqual(resolveRecipients(), ["a@x.com", "b@x.com"], "env wins; trimmed + de-duped");
+    delete process.env.ALERT_RECIPIENTS;
+    // committed config.email.to is empty -> no recipients (send would fail loudly)
+    assert.deepEqual(resolveRecipients(), []);
+  } finally {
+    if (saved === undefined) delete process.env.ALERT_RECIPIENTS;
+    else process.env.ALERT_RECIPIENTS = saved;
+  }
+});
+
 // --- dry-run pattern-alert diagnostics ---------------------------------------
 
 test("explainPatternAlert: no patterns -> empty breakdown, decision no", () => {
@@ -250,42 +266,60 @@ test("existing price-trigger alert still renders its reason and NO pattern block
   const body = buildBody([priceAlert()]);
   assert.match(body, /BITCOIN/);
   assert.match(body, /მიზეზი:/);
-  assert.doesNotMatch(body, /Chart-structure observation/, "no pattern block when there is no pattern");
+  assert.doesNotMatch(body, /ქვედა ზონა/, "no pattern block when there is no pattern");
 });
 
 test("a coin with BOTH a price trigger and a pattern renders ONE combined card", () => {
   const body = buildBody([priceAlert({ patternAlert: PA })]);
   assert.equal((body.match(/BITCOIN —/g) || []).length, 1, "one card, not two");
   assert.match(body, /მიზეზი:.*ბოლო შემოწმების/, "keeps the price-trigger reason");
-  assert.match(body, /Chart-structure observation/, "and adds the pattern observation");
+  assert.match(body, /ქვედა ზონა/, "and adds the pattern observation");
   assert.match(body, /Channel Up/);
 });
 
 test("a pattern-only alert renders the educational block and NOT the 'analysis unavailable' line", () => {
   const body = buildBody([priceAlert({ reasons: [], patternAlert: PA })]);
-  assert.match(body, /Chart-structure observation/);
+  assert.match(body, /ქვედა ზონა/);
   assert.doesNotMatch(body, /ანალიზი დროებით მიუწვდომელია/, "pattern-only cards skip the AI note");
   assert.match(body, /chart pattern observed/, "reason line marks the pattern observation");
 });
 
-test("pattern email uses the required educational framing and NO buy/sell instruction", () => {
+test("pattern email uses the beginner-friendly zone style and NO buy/sell language", () => {
   const body = buildBody([priceAlert({ reasons: [], patternAlert: PA })]);
-  // the three required safety framings are present
-  assert.match(body, /Worth checking/);
-  assert.match(body, /Chart-structure observation/);
-  assert.match(body, /Not a buy\/sell instruction/);
-  // OUTSIDE the explicit disclaimer line, there is no buy/sell / action language
-  const withoutDisclaimer = body.replace(/.*Not a buy\/sell instruction.*\n?/g, "");
-  assert.doesNotMatch(withoutDisclaimer, /\b(buy|sell|long|short|target|leverage)\b/i, "no buy/sell language outside the disclaimer");
-  // and no Georgian buy/sell IMPERATIVES anywhere
-  assert.doesNotMatch(body, /(იყიდე|გაყიდე|შეიძინე|გაასხვისე)/);
+  // beginner-friendly zones with plain explanations, not dry support/resistance labels
+  assert.match(body, /ქვედა ზონა: .* — /, "lower zone with a plain-language explanation");
+  assert.match(body, /ზედა ზონა: .* — /, "upper zone with a plain-language explanation");
+  assert.match(body, /ფიგურის სანდოობა: \d+% — /);
+  assert.doesNotMatch(body, /მხარდაჭერა|წინააღმდეგობა/, "no dry support/resistance labels");
+  // the buy/sell disclaimer is gone, and there is NO buy/sell language at all
+  assert.doesNotMatch(body, /Not a buy\/sell instruction/);
+  assert.doesNotMatch(body, /ყიდვა|გაყიდვ/, "no Georgian buy/sell wording");
+  assert.doesNotMatch(body, /\b(buy|sell|long|short|target|leverage)\b/i, "no English buy/sell wording");
 });
 
-test("the HTML email also combines into one card and carries the disclaimer", () => {
+test("the HTML email also combines into one card with zone copy and no disclaimer", () => {
   const html = buildHtml([priceAlert({ patternAlert: PA })]);
   assert.equal((html.match(/BITCOIN/g) || []).length, 1, "one card");
-  assert.match(html, /Chart-structure observation/);
-  assert.match(html, /Not a buy\/sell instruction/);
+  assert.match(html, /ქვედა ზონა/);
+  assert.doesNotMatch(html, /Not a buy\/sell instruction/);
+});
+
+// --- email SUBJECT: pattern-only vs price-style -------------------------------
+
+test("a pattern-only alert subject names the chart pattern (not a price move)", () => {
+  const subject = headline(priceAlert({ reasons: [], patternAlert: PA }));
+  assert.equal(subject, "📊 bitcoin Channel Up · $65,000");
+  assert.doesNotMatch(subject, /1h|24h|%/, "no price-move framing");
+});
+
+test("a combined price+pattern alert KEEPS the price-style subject", () => {
+  const subject = headline(priceAlert({ patternAlert: PA })); // has reasons AND a pattern
+  assert.match(subject, /^📈 bitcoin \$65,000 \(\+2\.00% 1h\)$/);
+  assert.doesNotMatch(subject, /Channel Up/, "pattern name stays out of a price-trigger subject");
+});
+
+test("a price-only alert subject is unchanged", () => {
+  assert.match(headline(priceAlert()), /^📈 bitcoin \$65,000 \(\+2\.00% 1h\)$/);
 });
 
 // --- georgianSummary rendering: the LLM's HTML string -> email (HTML + text) ---

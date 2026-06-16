@@ -399,7 +399,13 @@ export function explainPatternAlert(patterns, cooldowns, cfg, now) {
 
 // --- Notification (Resend) -----------------------------------------------------
 
-function headline(a) {
+export function headline(a) {
+  // A pattern-only alert (no price/drift/streak reason, just a chart pattern) gets a
+  // CHART-PATTERN subject so it doesn't masquerade as a price move. A coin that ALSO
+  // has a price/drift/streak reason keeps the price-style subject below.
+  if (!a.reasons?.length && a.patternAlert) {
+    return `📊 ${a.coin} ${a.patternAlert.patternName} · ${fmtPrice(a.price)}`;
+  }
   // Lead with whichever signal is largest in magnitude: a slow 24h bleed or a
   // multi-check trend can matter more than the latest 1h tick (which may be ~0).
   const candidates = [{ move: a.changePct, window: "1h" }];
@@ -444,26 +450,83 @@ function bodyAnalysis(a) {
   return "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
 }
 
-// Hard safety line shared by both renderings — an educational pattern alert is a
-// "watch", never an instruction. Keeps the required "Not a buy/sell instruction"
-// framing in one place. Georgian for the reader, English in parentheses.
-const PATTERN_DISCLAIMER =
-  "⚠️ ეს არის საგანმანათლებლო დაკვირვება და არა ყიდვა/გაყიდვის მითითება (Not a buy/sell instruction).";
-
 // Pattern-observed reason line for a coin whose ONLY trigger is a chart pattern.
 const PATTERN_REASON = "📊 გრაფიკული ფიგურა შენიშნულია (chart pattern observed)";
 
-// Educational chart-pattern block (plain text). STRICT + SAFE: it states the
-// structure and its levels and frames the invalidation as "where the structure
-// stops holding" — never an action. Carries the three required framings
-// ("Worth checking", "Chart-structure observation", "Not a buy/sell instruction").
+// Beginner-friendly Georgian copy per pattern: a Georgian name and a one-sentence
+// "what this trend means". `dir` (bull/bear/neutral) selects the zone + invalidation
+// guidance below, so each pattern reads in plain language, not dry labels.
+const PATTERN_COPY = {
+  "Ascending Triangle":   { ka: "აღმავალი სამკუთხედი", dir: "bull",
+    trend: "ფასი ქვედა ხაზიდან თანდათან მაღლა იწევს, ზედა ზღვარს კი ერთსა და იმავე დონეზე აწყდება — ხშირად ზრდისთვის მზადების ნიშანია." },
+  "Descending Triangle":  { ka: "დაღმავალი სამკუთხედი", dir: "bear",
+    trend: "ფასი ზედა ხაზიდან თანდათან ქვემოთ ეშვება, ქვედა ზღვარს კი ერთსა და იმავე დონეზე ეყრდნობა — ხშირად კლებისთვის მზადების ნიშანია." },
+  "Symmetrical Triangle": { ka: "სიმეტრიული სამკუთხედი", dir: "neutral",
+    trend: "ფასის რყევები თანდათან მცირდება და ორ ხაზს შორის იკუმშება — მიმართულება ჯერ გაურკვეველია და გარღვევას ელოდება." },
+  "Rising Wedge":         { ka: "აღმავალი სოლი", dir: "bear",
+    trend: "ფასი მაღლა იწევს, მაგრამ რყევები ვიწროვდება და იმპულსი სუსტდება — ხშირად აღმასვლის დაღლის ნიშანია." },
+  "Falling Wedge":        { ka: "დაღმავალი სოლი", dir: "bull",
+    trend: "ფასი ქვემოთ ეშვება, მაგრამ ვარდნა თანდათან სუსტდება და ვიწროვდება — ხშირად კლების ამოწურვის ნიშანია." },
+  "Channel Up":           { ka: "აღმავალი არხი", dir: "bull",
+    trend: "ფასი ორ პარალელურ ხაზს შორის, საფეხურებად მაღლა მიიწევს — მიმდინარე მიმართულება ზრდისკენაა." },
+  "Channel Down":         { ka: "დაღმავალი არხი", dir: "bear",
+    trend: "ფასი ორ პარალელურ ხაზს შორის, საფეხურებად ქვემოთ ეშვება — მიმდინარე მიმართულება კლებისკენაა." },
+  "Rectangle":            { ka: "მართკუთხედი", dir: "neutral",
+    trend: "ფასი გარკვეულ დიაპაზონში, ორ ჰორიზონტალურ ხაზს შორის მოძრაობს — ბაზარი ისვენებს და მკაფიო მიმართულება არ აქვს." },
+};
+const PATTERN_FALLBACK = { ka: "გრაფიკული ფიგურა", dir: "neutral", trend: "ფასი მნიშვნელოვან გრაფიკულ ფიგურას ქმნის." };
+
+// What to watch near each zone + what voids the pattern — by direction, so the
+// guidance is correct for bullish, bearish and range patterns alike.
+const ZONE_COPY = {
+  bull: {
+    lower: "თუ ფასი აქ შეჩერდა და ისევ აიწია, აღმავალი ტრენდი ძალაში რჩება; ქვემოთ მკაფიო გარღვევა კი სისუსტის ნიშანია.",
+    upper: "აქ ფასს ხშირად უჭირს გაგრძელება; ძლიერი გარღვევა ზრდის გაგრძელებას მიანიშნებს.",
+    invalidation: "თუ ფასი ამ დონის ქვემოთ დაიხურა, ფიგურა ძალას კარგავს.",
+  },
+  bear: {
+    lower: "ეს დონე ფასს ქვემოდან იჭერს; მკაფიო გარღვევა კლების გაღრმავებას მიანიშნებს.",
+    upper: "აქ ფასს აწევა გაუჭირდება; ზემოთ დამაგრება კი კლების სცენარს ასუსტებს.",
+    invalidation: "თუ ფასი ამ დონის ზემოთ დაიხურა, ფიგურა ძალას კარგავს.",
+  },
+  neutral: {
+    lower: "თუ ფასი აქ შეჩერდა, დიაპაზონი გრძელდება; ქვემოთ გარღვევა კლებისკენ მცდელობას აჩვენებს.",
+    upper: "თუ ფასი აქ შეფერხდა, დიაპაზონი გრძელდება; ზემოთ გარღვევა ზრდისკენ მცდელობას აჩვენებს.",
+    invalidation: "თუ ფასი დიაპაზონს რომელიმე მხარეს მკაფიოდ გასცდა, ფიგურა ძალას კარგავს.",
+  },
+};
+
+// Is the pattern clear or weak — without promising anything.
+function confidenceNote(c) {
+  if (c >= 0.85) return "ძალიან ნათელი სურათია.";
+  if (c >= 0.75) return "სურათი მკაფიოა, თუმცა გარანტია არ არსებობს.";
+  return "ფიგურა ჯერ სუსტია — სიფრთხილე ჯობს.";
+}
+
+// Shared copy pieces for one pattern, used by both the text and HTML renderings.
+function patternCopy(pa) {
+  const m = PATTERN_COPY[pa.patternName] ?? PATTERN_FALLBACK;
+  const z = ZONE_COPY[m.dir];
+  return {
+    head: `${m.ka} (${pa.patternName}) — ${m.trend}`,
+    lower: z.lower,
+    upper: z.upper,
+    invalidation: z.invalidation,
+    confidence: confidenceNote(pa.confidence),
+  };
+}
+
+// Educational chart-pattern block (plain text): beginner-friendly Georgian, with
+// each level explained in plain language (ქვედა/ზედა ზონა, not dry support/
+// resistance labels). Describes the structure only — no buy/sell language.
 function patternBlockText(pa) {
+  const c = patternCopy(pa);
   return [
-    `📊 გრაფიკის სტრუქტურის დაკვირვება (Chart-structure observation): ${pa.patternName}`,
-    `ღირს გადახედვა (Worth checking) — სანდოობა ${Math.round(pa.confidence * 100)}%.`,
-    `მხარდაჭერა (support): ${fmtPrice(pa.supportLevel)} · წინააღმდეგობა (resistance): ${fmtPrice(pa.resistanceLevel)}`,
-    `თუ ფასი ${fmtPrice(pa.invalidationLevel)}-ს გასცდება, ეს სტრუქტურა აღარ მოქმედებს (გაუქმების დონე / invalidation).`,
-    PATTERN_DISCLAIMER,
+    `📊 ${c.head}`,
+    `ქვედა ზონა: ${fmtPrice(pa.supportLevel)} — ${c.lower}`,
+    `ზედა ზონა: ${fmtPrice(pa.resistanceLevel)} — ${c.upper}`,
+    `გაუქმება: ${fmtPrice(pa.invalidationLevel)} — ${c.invalidation}`,
+    `ფიგურის სანდოობა: ${Math.round(pa.confidence * 100)}% — ${c.confidence}`,
   ].join("\n");
 }
 
@@ -600,19 +663,20 @@ function htmlAnalysis(a) {
 
 // Educational chart-pattern block (HTML). Blue-accented so it reads as a neutral
 // observation, distinct from the yellow AI-analysis block. Mirrors patternBlockText
-// and carries the same three required framings; every dynamic value is escaped.
+// (same beginner-friendly Georgian copy); every dynamic value is escaped.
 function patternHtml(pa) {
-  const pct = `${Math.round(pa.confidence * 100)}%`;
+  const c = patternCopy(pa);
+  const line = (label, value, note) =>
+    `<div style="margin-bottom:6px;"><span style="color:#eaecef;font-weight:600;">${esc(label)}: ${esc(value)}</span> <span style="color:#9aa3ad;">— ${esc(note)}</span></div>`;
   return `
         <div style="background:#0b0e11;border-left:3px solid #3b82f6;border-radius:8px;padding:14px 16px;margin:0 0 14px;">
-          <div style="color:#eaecef;font-size:13px;font-weight:700;margin-bottom:6px;">📊 გრაფიკის სტრუქტურის დაკვირვება <span style="color:#848e9c;font-weight:400;">(Chart-structure observation)</span></div>
-          <div style="color:#d6dae0;font-size:14px;margin-bottom:8px;">${esc(pa.patternName)} — <strong>ღირს გადახედვა</strong> (Worth checking) · სანდოობა ${esc(pct)}</div>
-          <div style="color:#b7bdc6;font-size:12px;line-height:1.8;margin-bottom:8px;">
-            <span style="color:#848e9c;">მხარდაჭერა (support)</span> ${esc(fmtPrice(pa.supportLevel))} ·
-            <span style="color:#848e9c;">წინააღმდეგობა (resistance)</span> ${esc(fmtPrice(pa.resistanceLevel))}<br>
-            თუ ფასი <strong>${esc(fmtPrice(pa.invalidationLevel))}</strong>-ს გასცდება, ეს სტრუქტურა აღარ მოქმედებს <span style="color:#848e9c;">(invalidation)</span>
+          <div style="color:#d6dae0;font-size:14px;line-height:1.6;margin-bottom:10px;">📊 ${esc(c.head)}</div>
+          <div style="color:#b7bdc6;font-size:13px;line-height:1.6;">
+            ${line("ქვედა ზონა", fmtPrice(pa.supportLevel), c.lower)}
+            ${line("ზედა ზონა", fmtPrice(pa.resistanceLevel), c.upper)}
+            ${line("გაუქმება", fmtPrice(pa.invalidationLevel), c.invalidation)}
+            ${line("ფიგურის სანდოობა", `${Math.round(pa.confidence * 100)}%`, c.confidence)}
           </div>
-          <div style="color:#848e9c;font-size:12px;">${esc(PATTERN_DISCLAIMER)}</div>
         </div>`;
 }
 
@@ -646,10 +710,23 @@ export function buildHtml(alerts) {
   </body></html>`;
 }
 
+// Alert recipients come from the ALERT_RECIPIENTS env var (comma-separated) so
+// personal addresses aren't committed to the repo; config.email.to is an optional
+// fallback for local/legacy setups. Trimmed and de-duplicated.
+export function resolveRecipients() {
+  const fromEnv = (process.env.ALERT_RECIPIENTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const list = fromEnv.length ? fromEnv : [].concat(config.email?.to ?? []).filter(Boolean);
+  return [...new Set(list)];
+}
+
 async function sendEmail(subject, text, html) {
+  const recipients = resolveRecipients();
   if (dryRun) {
     console.log("\n--- DRY RUN: email not sent ---");
-    console.log(`To:      ${config.email.to}`);
+    console.log(`To:      ${recipients.join(", ") || "(none — set ALERT_RECIPIENTS)"}`);
     console.log(`Subject: ${subject}`);
     console.log(text);
     if (html) {
@@ -662,7 +739,9 @@ async function sendEmail(subject, text, html) {
   }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("RESEND_API_KEY not set");
-  const recipients = [].concat(config.email.to);
+  if (!recipients.length) {
+    throw new Error("no alert recipients — set the ALERT_RECIPIENTS env var (comma-separated) or config.email.to");
+  }
 
   async function send(to) {
     const res = await fetch("https://api.resend.com/emails", {
