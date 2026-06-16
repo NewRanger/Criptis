@@ -173,10 +173,48 @@ async function gatherMarket(coins) {
 
 // --- Analysis (Anthropic; failure must never block the email) -----------------
 
-// Write the analysis paragraph for ONE coin that cleared the breakout pre-filter.
-// Receives the coin's alert data (with its full 48h OHLC candle array) and the
-// shared news headlines, and returns the paragraph (or null if the key is unset
-// or the call fails — the email still goes out with raw numbers for that coin).
+// Forced-tool schema for the analysis. Claude is REQUIRED to call this tool, so
+// the watcher always gets strict, parseable JSON back — never free-form prose to
+// scrape. The shape is fixed; see prompts/analysis.md for how each field is filled.
+const ANALYSIS_TOOL = {
+  name: "report_analysis",
+  description: "Report the structured technical analysis for this one coin. Always call this tool.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      patternFound: {
+        type: "boolean",
+        description: "Whether a recognizable chart/candlestick pattern or clear price-action structure is present.",
+      },
+      patternName: {
+        type: "string",
+        description: 'Short plain name of the pattern (e.g. "Bollinger breakout", "bull flag"); empty string "" if none.',
+      },
+      bias: {
+        type: "string",
+        enum: ["Bullish", "Bearish", "Neutral"],
+        description: "Directional read implied by the evidence.",
+      },
+      invalidationLevel: {
+        type: "number",
+        description: "Exact USD price at which this read is proven wrong (the setup fails). Derived from the candles, not invented.",
+      },
+      georgianSummary: {
+        type: "string",
+        description:
+          "Beginner-friendly Georgian analysis as an HTML string: EXACTLY three <br>•-prefixed bullets with <strong> labels, per the system prompt. Only <br> and <strong> tags.",
+      },
+    },
+    required: ["patternFound", "patternName", "bias", "invalidationLevel", "georgianSummary"],
+  },
+};
+
+// Analyze ONE coin that cleared the breakout pre-filter. Receives the coin's alert
+// data (with its full 48h OHLC candle array) and the shared news headlines, forces
+// Claude through ANALYSIS_TOOL, and returns the validated object
+// { patternFound, patternName, bias, invalidationLevel, georgianSummary } — or null
+// if the key is unset or the call fails (the email still goes out with raw numbers).
 async function analyze(coinData, news = []) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -241,8 +279,10 @@ async function analyze(coinData, news = []) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 500,
+        max_tokens: 1024,
         system,
+        tools: [ANALYSIS_TOOL],
+        tool_choice: { type: "tool", name: ANALYSIS_TOOL.name },
         messages: [{ role: "user", content: userMsg }],
       }),
       signal: AbortSignal.timeout(30_000),
@@ -251,12 +291,20 @@ async function analyze(coinData, news = []) {
       throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     }
     const data = await res.json();
-    const text = (data.content ?? [])
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim();
-    return text || null;
+    // Forced tool use -> the analysis is the input of the tool_use block, already
+    // structured. Validate the one field the UI can't do without (georgianSummary)
+    // and normalize the rest, so a malformed reply falls back to raw numbers.
+    const out = (data.content ?? []).find((b) => b.type === "tool_use" && b.name === ANALYSIS_TOOL.name)?.input;
+    if (!out || typeof out.georgianSummary !== "string" || !out.georgianSummary.trim()) {
+      throw new Error("forced tool call returned no usable analysis");
+    }
+    return {
+      patternFound: Boolean(out.patternFound),
+      patternName: typeof out.patternName === "string" ? out.patternName : "",
+      bias: ["Bullish", "Bearish", "Neutral"].includes(out.bias) ? out.bias : "Neutral",
+      invalidationLevel: Number.isFinite(out.invalidationLevel) ? out.invalidationLevel : null,
+      georgianSummary: out.georgianSummary.trim(),
+    };
   } catch (err) {
     console.error(`Anthropic call failed — sending raw numbers only: ${err.message}`);
     return null;
@@ -282,11 +330,30 @@ const STRUCTURAL_NOTE =
   "(ფასი Bollinger-ის ზოლის გარეთ + მკვეთრად გაზრდილი მოცულობა) არ დადასტურდა, " +
   "ამიტომ დეტალური AI ანალიზი არ მომზადებულა — იხ. ციფრები ზემოთ.";
 
-// The per-coin analysis tail (plain text): the AI paragraph if the coin passed
-// the pre-filter and the call succeeded; the structural note if it didn't qualify;
+// bias -> pill colour + Georgian label. Green for up, red for down, grey neutral.
+const BIAS = {
+  Bullish: { label: "ზრდადი", bg: "#0ecb81", fg: "#fff" },
+  Bearish: { label: "კლებადი", bg: "#f6465d", fg: "#fff" },
+  Neutral: { label: "ნეიტრალური", bg: "#2b3139", fg: "#d6dae0" },
+};
+const biasStyle = (bias) => BIAS[bias] ?? BIAS.Neutral;
+
+// georgianSummary comes back as an HTML string (only <br> and <strong>). For the
+// plain-text body, turn <br> into newlines and drop the <strong> tags.
+export const summaryToText = (s) =>
+  String(s)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/?strong>/gi, "")
+    .replace(/^\n+/, "")
+    .trim();
+
+// The per-coin analysis tail (plain text): the AI analysis if the coin passed the
+// pre-filter and the call succeeded; the structural note if it didn't qualify;
 // otherwise (passed but the AI call failed/unset) the temporary-unavailable line.
 function bodyAnalysis(a) {
-  if (a.analysis) return `ანალიზი:\n${a.analysis}`;
+  if (a.analysis) {
+    return `ანალიზი — ტენდენცია: ${biasStyle(a.analysis.bias).label}\n${summaryToText(a.analysis.georgianSummary)}`;
+  }
   if (a.prefilter && !a.prefilter.pass) return STRUCTURAL_NOTE;
   return "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
 }
@@ -316,14 +383,15 @@ function buildBody(alerts) {
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// Light formatting for the analysis paragraph: escape first, then turn *…* / **…**
-// emphasis into bold and newlines into <br>. The prompt tells the model it may wrap
-// key numbers/terms in single asterisks; the plain-text body keeps them literal.
-const mdLite = (s) =>
-  esc(s)
-    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>")
-    .replace(/\n/g, "<br>");
+// The georgianSummary arrives as an HTML string using only <br> and <strong>.
+// Escape it fully, then restore just those two tags — so an unexpected tag from
+// the model can't inject markup or break the card layout, while the intended
+// bold labels and line breaks render.
+export const summaryHtml = (s) =>
+  esc(String(s))
+    .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+    .replace(/&lt;strong&gt;/gi, "<strong>")
+    .replace(/&lt;\/strong&gt;/gi, "</strong>");
 
 // QuickChart line-chart image of the stored price history. Decorative only — if
 // QuickChart is unreachable the <img> just doesn't render and the card's numbers
@@ -389,18 +457,30 @@ function readoutHtml(r) {
         </div>`;
 }
 
-// Per-card analysis block (HTML): the AI paragraph (yellow-accented) if the coin
-// passed the pre-filter and the call succeeded; a muted structural note if it
-// didn't qualify; otherwise the temporary-unavailable line. Mirrors bodyAnalysis.
+// Dynamic bias pill: green for Bullish, red for Bearish, grey for Neutral.
+function biasPill(bias) {
+  const { label, bg, fg } = biasStyle(bias);
+  return `<span style="display:inline-block;background:${bg};color:${fg};font-weight:600;font-size:12px;padding:3px 10px;border-radius:6px;">ტენდენცია: ${esc(label)}</span>`;
+}
+
+// Per-card analysis block (HTML): the AI analysis (bias pill + the model's
+// georgianSummary, yellow-accented) if the coin passed the pre-filter and the call
+// succeeded; a muted structural note if it didn't qualify; otherwise the
+// temporary-unavailable line. Mirrors bodyAnalysis.
 function htmlAnalysis(a) {
   if (a.analysis) {
-    return `<div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;margin-top:14px;color:#d6dae0;font-size:14px;line-height:1.6;">${mdLite(a.analysis)}</div>`;
+    const t = a.analysis;
+    return `
+        <div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;margin:0 0 14px;">
+          <div style="margin-bottom:10px;">${biasPill(t.bias)}</div>
+          <div style="color:#d6dae0;font-size:14px;line-height:1.7;">${summaryHtml(t.georgianSummary)}</div>
+        </div>`;
   }
   const text =
     a.prefilter && !a.prefilter.pass
       ? STRUCTURAL_NOTE
       : "ანალიზი დროებით მიუწვდომელია — იხ. ციფრები ზემოთ.";
-  return `<div style="border-left:3px solid #2b3139;border-radius:8px;padding:12px 16px;margin-top:14px;color:#848e9c;font-size:13px;line-height:1.6;">${esc(text)}</div>`;
+  return `<div style="border-left:3px solid #2b3139;border-radius:8px;padding:12px 16px;margin:0 0 14px;color:#848e9c;font-size:13px;line-height:1.6;">${esc(text)}</div>`;
 }
 
 // HTML twin of buildBody — a Binance-style dark card per coin with an embedded
@@ -418,8 +498,8 @@ function buildHtml(alerts) {
         <div style="margin-bottom:12px;">${pills.join("")}</div>
         <div style="color:#b7bdc6;font-size:13px;line-height:1.5;margin-bottom:14px;">${esc(a.reasons.join("; "))}</div>
         ${readoutHtml(a.readout)}
-        <img src="${chartUrl(a)}" alt="${esc(a.coin)} price chart" style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;" />
         ${htmlAnalysis(a)}
+        <img src="${chartUrl(a)}" alt="${esc(a.coin)} price chart" style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;" />
       </div>`;
   });
   return `<!doctype html><html><body style="margin:0;padding:20px;background:#181a20;font-family:Arial,Helvetica,sans-serif;">

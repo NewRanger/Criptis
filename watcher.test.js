@@ -1,11 +1,11 @@
-// Unit tests for the two pure trigger/validation helpers in watcher.js.
+// Unit tests for the pure helpers in watcher.js.
 // Run with:  node --test
 // These import the pure helpers only; main() is guarded so importing does not run.
 
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { derivePrices, driftDecision } from "./watcher.js";
+import { derivePrices, driftDecision, summaryHtml, summaryToText } from "./watcher.js";
 
 // --- BUG 1: derived-price validation (latest close, never zeroed) ------------
 
@@ -100,4 +100,33 @@ test("driftDecision: first run after deploy (prevDir defaulted to 0) on a mid-dr
 test("driftDecision: REARM = 1.0 means no hysteresis (re-arms the moment it drops below threshold)", () => {
   const d = driftDecision(3.9, THRESHOLD, 1, 1.0); // 3.9 < 4*1.0 -> re-arm immediately
   assert.deepEqual(d, { fire: false, nextDir: 0 });
+});
+
+// --- georgianSummary rendering: the LLM's HTML string -> email (HTML + text) ---
+
+test("summaryHtml preserves the allowed <br> and <strong> tags and the Georgian text", () => {
+  const s = "<br>• <strong>რა მოხდა:</strong> ფასი <strong>$69</strong>-მდე აიწია";
+  const out = summaryHtml(s);
+  assert.match(out, /^<br>• <strong>რა მოხდა:<\/strong> ფასი <strong>\$69<\/strong>-მდე აიწია$/);
+});
+
+test("summaryHtml neutralizes any tag the model wasn't supposed to emit (no HTML injection)", () => {
+  const out = summaryHtml('ok <img src=x onerror=alert(1)> <script>bad()</script> <strong>safe</strong>');
+  assert.doesNotMatch(out, /<img/i, "the <img> tag is escaped, not rendered");
+  assert.doesNotMatch(out, /<script>/i, "the <script> tag is escaped, not rendered");
+  assert.match(out, /&lt;img src=x onerror=alert\(1\)&gt;/, "shown as inert text instead");
+  assert.match(out, /<strong>safe<\/strong>/, "the allowed tag still renders");
+});
+
+test("summaryHtml only restores a bare <br>/<strong>, not one carrying attributes", () => {
+  const out = summaryHtml('<strong onmouseover=x>nope</strong> <br class=y> <br/> done');
+  assert.doesNotMatch(out, /<strong onmouseover/i, "attribute-bearing <strong> stays escaped");
+  assert.doesNotMatch(out, /<br class/i, "attribute-bearing <br> stays escaped");
+  assert.match(out, /<br>/, "a bare <br/> is restored");
+});
+
+test("summaryToText turns <br> into newlines and drops <strong>, for the plain-text body", () => {
+  const s = "<br>• <strong>რა მოხდა:</strong> X<br>• <strong>ტენდენცია:</strong> Y";
+  assert.equal(summaryToText(s), "• რა მოხდა: X\n• ტენდენცია: Y");
+  assert.equal(summaryToText("a<br/>b<BR>c"), "a\nb\nc", "handles <br/> and <BR> case-insensitively");
 });
