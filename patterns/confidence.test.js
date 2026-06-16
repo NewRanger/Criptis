@@ -24,10 +24,11 @@ test("scoreVolume rewards contraction for triangles, steadiness for channels", (
   assert.equal(scoreVolume(undefined), undefined, "absent volume drops out of the mean");
 });
 
-test("scoreBreakout: converging rewards a near apex; parallel rewards proximity to a boundary", () => {
-  assert.equal(scoreBreakoutConverging(47, 47), 1, "apex reached => full credit");
-  assert.ok(scoreBreakoutConverging(48, 47) < 1, "apex still ahead => below full credit");
-  assert.ok(scoreBreakoutConverging(80, 47) < scoreBreakoutConverging(55, 47), "nearer apex scores higher");
+test("scoreBreakout: a near FUTURE apex scores high; a PAST/at apex scores 0 (fix 5)", () => {
+  assert.equal(scoreBreakoutConverging(47, 47), 0, "apex reached => resolved, no credit");
+  assert.equal(scoreBreakoutConverging(30, 47), 0, "past apex => 0 (used to be a wrong 1.0)");
+  assert.ok(scoreBreakoutConverging(48, 47) > 0.9, "apex just ahead => near-full credit");
+  assert.ok(scoreBreakoutConverging(80, 47) < scoreBreakoutConverging(55, 47), "nearer future apex scores higher");
   // close sitting on the upper boundary scores higher than mid-channel
   assert.ok(scoreBreakoutParallel(142, 142, 128, 2) > scoreBreakoutParallel(135, 142, 128, 2));
 });

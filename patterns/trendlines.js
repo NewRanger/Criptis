@@ -59,7 +59,14 @@ export const lineValue = (line, x) => line.slope * x + line.intercept;
 export function lineGeometry(resLine, supLine, x0, xN) {
   const widthStart = lineValue(resLine, x0) - lineValue(supLine, x0);
   const widthEnd = lineValue(resLine, xN) - lineValue(supLine, xN);
-  const convergenceRatio = widthStart !== 0 ? (widthStart - widthEnd) / widthStart : 0;
+  // Stable contraction metric: normalise by the LARGER band width, never by
+  // widthStart alone (which explodes when the band nearly closes or the lines have
+  // crossed — a sign-flipped widthStart produced spurious "convergence"). Bounded
+  // to [-1, 1]: >0 converging, ~0 parallel, <0 widening. For a normal converging
+  // band (widthStart > widthEnd > 0) the larger width IS widthStart, so this is
+  // identical to the intuitive "fraction the band narrowed" — no recalibration.
+  const denom = Math.max(Math.abs(widthStart), Math.abs(widthEnd));
+  const convergenceRatio = denom > 0 ? (widthStart - widthEnd) / denom : 0;
   const slopeDiff = resLine.slope - supLine.slope;
   const apexBar = slopeDiff !== 0 ? (supLine.intercept - resLine.intercept) / slopeDiff : null;
   return {

@@ -11,7 +11,9 @@ import {
   ascendingTriangle, descendingTriangle, symmetricalTriangle, rectangle,
   risingWedge, fallingWedge, channelUp, channelDown,
   invalidatedChannelUp, invalidatedChannelDown, setLastClose, broadening, noise,
+  twoTouchRisingWedge,
 } from "./fixtures/synth.js";
+import { findPivots, atr, fitLine, lineGeometry } from "./index.js";
 
 const REQUIRED = [
   "patternName", "confidence", "supportLevel", "resistanceLevel",
@@ -101,6 +103,49 @@ test("refuses noisy / random geometry (no clean trendline fit)", () => {
   for (const seed of [1, 12345, 67890, 555]) {
     assert.deepEqual(detectPatterns(noise(seed)), [], `seed ${seed} produced a phantom pattern`);
   }
+});
+
+// --- Family A geometry guards (from the live Ripple audit) ------------------
+
+// The captured real Ripple series whose fitted lines CROSS inside the window
+// (widthStart < 0) and whose apex sits in the PAST — the degenerate "Rising Wedge"
+// the audit flagged. Both the crossed-envelope guard and the future-apex guard
+// reject it.
+const rippleCrossed = () =>
+  JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "crossed-envelope.json"), "utf8"));
+
+test("guard 1+2: the crossed-envelope / past-apex Ripple wedge is now rejected", () => {
+  const s = rippleCrossed();
+  // document WHY: the fitted resistance/support cross inside the window (a width
+  // goes negative) and the apex is behind the latest bar
+  const a = atr(s, 14);
+  const p = findPivots(s, { atrValue: a });
+  const res = fitLine(p.highs.map((q) => ({ x: q.idx, y: q.price })));
+  const sup = fitLine(p.lows.map((q) => ({ x: q.idx, y: q.price })));
+  const x0 = Math.min(p.highs[0].idx, p.lows[0].idx);
+  const xN = s.closes.length - 1;
+  const g = lineGeometry(res, sup, x0, xN);
+  assert.ok(g.widthStart < 0 || g.widthEnd < 0, "the lines cross inside the window");
+  assert.ok(g.apexBar != null && g.apexBar <= xN, "the apex is in the past");
+  assert.deepEqual(detectPatterns(s), [], "=> no pattern reported");
+});
+
+test("guard 3: the same series no longer yields a runaway convergenceRatio", () => {
+  const s = rippleCrossed();
+  const a = atr(s, 14);
+  const p = findPivots(s, { atrValue: a });
+  const res = fitLine(p.highs.map((q) => ({ x: q.idx, y: q.price })));
+  const sup = fitLine(p.lows.map((q) => ({ x: q.idx, y: q.price })));
+  const g = lineGeometry(res, sup, Math.min(p.highs[0].idx, p.lows[0].idx), s.closes.length - 1);
+  // crossed lines (opposite-sign widths) bound the ratio to [-2, 2]; the point is
+  // it is no longer a runaway ~10.7 from dividing by a near-zero widthStart.
+  assert.ok(Math.abs(g.convergenceRatio) <= 2 + 1e-9, `convergenceRatio ${g.convergenceRatio} must be bounded (was ~10.7)`);
+});
+
+test("guard 4: a valid 2-touch Rising Wedge is NOT reported, but IS once the gate is relaxed", () => {
+  assert.deepEqual(detectPatterns(twoTouchRisingWedge()), [], "2 pivot highs => not reported");
+  const relaxed = detectPatterns(twoTouchRisingWedge(), { minTouchesReport: 2 })[0];
+  assert.equal(relaxed.patternName, "Rising Wedge", "geometry is valid — only the touch gate filtered it");
 });
 
 // --- Active-pattern gate: a pattern price has already broken out of (in the

@@ -141,6 +141,18 @@ export const broadening = () =>
     highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: steady,
   });
 
+// A geometrically VALID Rising Wedge (proper envelope, future apex) supported by
+// only TWO pivot highs — the resistance line rests on just 2 points. Must NOT be
+// reported (the minTouchesReport gate), but IS detected once that gate is relaxed.
+export const twoTouchRisingWedge = () =>
+  zigzag({
+    // starts/ends on a LOW so the phantom turning points are highs at the very
+    // edges (not confirmable as pivots) — leaving exactly 2 interior high touches.
+    upper: { slope: 0.3, intercept: 122 },
+    lower: { slope: 0.6, intercept: 104 },
+    highIdx: [16, 32], lowIdx: [8, 24, 40], volFn: contracting,
+  });
+
 // Deterministic pseudo-random walk (seeded LCG — no Math.random, fully repeatable).
 // Pivots scatter, so no clean trendline fits / the geometry is ambiguous => [].
 export function noise(seed = 12345, n = 48) {

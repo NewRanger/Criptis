@@ -36,12 +36,13 @@ export function scoreFit(rmsResidual, atrValue, { lambda = 1.5 } = {}) {
   return clamp01(1 - rmsResidual / (lambda * atrValue));
 }
 
-// Converging patterns (triangles/wedges): the closer the apex, the more imminent
-// the breakout. Apex already reached/passed -> full credit; `horizon` bars away or
-// more -> none.
+// Converging patterns (triangles/wedges): the closer the FUTURE apex, the more
+// imminent the breakout. A past or reached apex (apexBar <= xN) scores 0 — the
+// lines have already met, so the structure has resolved/degraded, it is NOT "about
+// to break". `horizon` bars ahead or more -> 0.
 export function scoreBreakoutConverging(apexBar, xN, { horizon = 48 } = {}) {
   if (!Number.isFinite(apexBar)) return 0;
-  if (apexBar <= xN) return 1;
+  if (apexBar <= xN) return 0; // apex reached or in the past -> resolved, not imminent
   return clamp01(1 - (apexBar - xN) / horizon);
 }
 

@@ -45,3 +45,12 @@ test("lineGeometry: converging lines => positive ratio and a finite apex ahead",
   assert.ok(g.convergenceRatio > 0.4, `ratio ${g.convergenceRatio}`);
   assert.ok(Number.isFinite(g.apexBar) && g.apexBar > 10, `apex ${g.apexBar}`);
 });
+
+test("lineGeometry: a near-zero widthStart does NOT inflate convergence (fix 3 — bounded to [-1,1])", () => {
+  // widthStart ~ 0.001, widthEnd ~ 5.001 (band widening). The old ÷widthStart
+  // formula returned ~ -5000; the stable (÷larger-width) denominator keeps it bounded.
+  const res = { slope: 1, intercept: 100, slopePctPerStep: 0 };
+  const sup = { slope: 0.5, intercept: 99.999, slopePctPerStep: 0 };
+  const g = lineGeometry(res, sup, 0, 10);
+  assert.ok(Math.abs(g.convergenceRatio) <= 1 + 1e-9, `ratio ${g.convergenceRatio} must be bounded`);
+});

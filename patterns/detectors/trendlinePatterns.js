@@ -30,7 +30,9 @@ export const DEFAULTS = {
   atrPeriod: 14,
   pivotWidth: 3,
   minProminenceAtr: 0.5,
-  minTouches: 2,        // each line needs at least this many pivots
+  minTouches: 2,        // each line needs at least this many pivots to FIT a line
+  minTouchesReport: 3,  // ...but a REPORTED pattern needs this many on both lines —
+                        // two points are trivially collinear, not real evidence
   maxResidAtr: 0.8,     // a line is valid only if its RMS residual <= this * ATR
   flatSlopePct: 0.05,   // |slope %/bar| below this counts as "flat"
   convergeRatio: 0.4,   // band narrows by >= this fraction => "converging"
@@ -148,6 +150,20 @@ export function detectTrendlinePatterns(series, opts = {}) {
   if (!name) return [];
 
   const innate = INNATE[name];
+
+  // --- Geometry validity guards (reject degenerate "patterns" from the audit) ---
+  // (1) Reject crossed/inverted envelopes: a real pattern keeps resistance ABOVE
+  // support across the WHOLE span. Both widths > 0 <=> the lines never cross inside
+  // [x0, xN]. (The live Ripple "Rising Wedge" had widthStart < 0 — lines crossed.)
+  if (!(geo.widthStart > 0 && geo.widthEnd > 0)) return [];
+  // (2) Converging patterns must point at a FUTURE apex. A past/at apex (apexBar <=
+  // xN) means the lines have already met — the structure resolved or degraded.
+  if (innate.kind === "converging" && !(Number.isFinite(geo.apexBar) && geo.apexBar > xN)) return [];
+  // (4) Two pivots are trivially collinear, so a 2-touch line is not evidence of a
+  // trendline. The candidate is fit internally (minTouches), but only patterns whose
+  // WEAKER line has >= minTouchesReport touches are actually reported.
+  if (Math.min(pivots.highs.length, pivots.lows.length) < t.minTouchesReport) return [];
+
   const resistanceLevel = lineValue(resLine, xN);
   const supportLevel = lineValue(supLine, xN);
   const close = closes[n - 1];

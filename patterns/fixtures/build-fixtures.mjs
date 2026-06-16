@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import {
   ascendingTriangle, descendingTriangle, symmetricalTriangle, rectangle,
   risingWedge, fallingWedge, channelUp, channelDown,
-  invalidatedChannelUp, invalidatedChannelDown, broadening, noise,
+  invalidatedChannelUp, invalidatedChannelDown, broadening, noise, twoTouchRisingWedge,
 } from "./synth.js";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +27,7 @@ const out = {
   "invalidated-channel-down": invalidatedChannelDown(),
   "broadening": broadening(),
   "noise": noise(),
+  "two-touch-rising-wedge": twoTouchRisingWedge(),
 };
 
 for (const [name, series] of Object.entries(out)) {

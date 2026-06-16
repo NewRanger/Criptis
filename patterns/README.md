@@ -103,6 +103,26 @@ price is still contained:
 ATR. This prevents reporting e.g. a bullish Channel Up that price has already
 fallen out of the bottom of.
 
+## Geometry validity guards
+
+Before a candidate is reported it must survive four guards (added after a live
+Ripple "Rising Wedge" turned out to be a degenerate fit):
+
+1. **No crossed/inverted envelope** — resistance must stay above support across the
+   whole span, i.e. `widthStart > 0 && widthEnd > 0`. If the fitted lines cross
+   inside the window, it isn't a containing envelope → reject.
+2. **Future apex (converging patterns)** — the lines must meet *ahead* of the latest
+   bar (`apexBar > xN`). A past/at apex means the structure already resolved.
+3. **Stable convergence** — `convergenceRatio` is normalised by the *larger* band
+   width, never by `widthStart` alone (which exploded to ~10.7 when the lines nearly
+   met or crossed). Bounded, not a runaway.
+4. **No two-point lines** — two pivots are trivially collinear, so a reported pattern
+   needs `≥ minTouchesReport` (3) touches on **both** lines. A 2-touch candidate is
+   fit internally but not reported.
+
+Proximity scoring agrees with guard 2: a past apex scores **0** (resolved), not full
+credit.
+
 ## Confidence model (5 factors)
 
 `confidence` is a weighted mean of five sub-scores in `[0,1]`
