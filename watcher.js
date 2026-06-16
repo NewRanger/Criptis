@@ -42,6 +42,17 @@ const changeThresholdPct = config.changeThresholdPct ?? 2;
 const driftThresholdPct = config.driftThresholdPct ?? 5;
 const streakLength = config.streakLength ?? 5; // consecutive same-direction checks that flag a trend
 
+// Optional pattern-alert path — DISABLED by default. A detected chart pattern can
+// raise an educational "worth checking" email only when explicitly enabled and the
+// match clears minConfidence; the same coin+pattern is then muted for cooldownHours.
+// `enabled` is true ONLY when literally set to true, so a missing/garbled value
+// stays off. This path never gates or weakens the price/drift/streak triggers.
+const patternAlertsCfg = {
+  enabled: config.patternAlerts?.enabled === true,
+  minConfidence: Number.isFinite(config.patternAlerts?.minConfidence) ? config.patternAlerts.minConfidence : 0.75,
+  cooldownHours: Number.isFinite(config.patternAlerts?.cooldownHours) ? config.patternAlerts.cooldownHours : 12,
+};
+
 function loadState() {
   try {
     const state = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
@@ -339,6 +350,30 @@ export function toPublicPatterns(series, detect = detectPatterns) {
   }
 }
 
+// --- Pattern alerts (opt-in, educational) -------------------------------------
+
+// Decide whether a coin's detected patterns warrant an educational pattern alert.
+// PURE + testable: given the coin's ACTIVE patterns (public shape — detectPatterns
+// already drops invalidated ones, so anything here is active), its per-pattern
+// cooldown record, the config and `now`, returns the single highest-confidence
+// ELIGIBLE pattern, or null. A pattern is eligible only when: alerts are enabled,
+// confidence >= minConfidence, all three levels are finite numbers, and the same
+// coin+patternName has NOT alerted within cooldownHours. Never throws.
+export function evaluatePatternAlert(patterns, cooldowns, cfg, now) {
+  if (!cfg || cfg.enabled !== true) return null;
+  const minConfidence = Number.isFinite(cfg.minConfidence) ? cfg.minConfidence : 0.75;
+  const cooldownMs = (Number.isFinite(cfg.cooldownHours) ? cfg.cooldownHours : 12) * HOUR;
+  const ranked = [...(patterns ?? [])].sort((a, b) => (b?.confidence ?? 0) - (a?.confidence ?? 0));
+  for (const p of ranked) {
+    if (!Number.isFinite(p?.confidence) || p.confidence < minConfidence) continue;
+    if (![p.supportLevel, p.resistanceLevel, p.invalidationLevel].every(Number.isFinite)) continue;
+    const last = cooldowns?.[p.patternName];
+    if (Number.isFinite(last) && now - last < cooldownMs) continue; // still cooling down
+    return p;
+  }
+  return null;
+}
+
 // --- Notification (Resend) -----------------------------------------------------
 
 function headline(a) {
@@ -386,7 +421,30 @@ function bodyAnalysis(a) {
   return "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
 }
 
-function buildBody(alerts) {
+// Hard safety line shared by both renderings — an educational pattern alert is a
+// "watch", never an instruction. Keeps the required "Not a buy/sell instruction"
+// framing in one place. Georgian for the reader, English in parentheses.
+const PATTERN_DISCLAIMER =
+  "⚠️ ეს არის საგანმანათლებლო დაკვირვება და არა ყიდვა/გაყიდვის მითითება (Not a buy/sell instruction).";
+
+// Pattern-observed reason line for a coin whose ONLY trigger is a chart pattern.
+const PATTERN_REASON = "📊 გრაფიკული ფიგურა შენიშნულია (chart pattern observed)";
+
+// Educational chart-pattern block (plain text). STRICT + SAFE: it states the
+// structure and its levels and frames the invalidation as "where the structure
+// stops holding" — never an action. Carries the three required framings
+// ("Worth checking", "Chart-structure observation", "Not a buy/sell instruction").
+function patternBlockText(pa) {
+  return [
+    `📊 გრაფიკის სტრუქტურის დაკვირვება (Chart-structure observation): ${pa.patternName}`,
+    `ღირს გადახედვა (Worth checking) — სანდოობა ${Math.round(pa.confidence * 100)}%.`,
+    `მხარდაჭერა (support): ${fmtPrice(pa.supportLevel)} · წინააღმდეგობა (resistance): ${fmtPrice(pa.resistanceLevel)}`,
+    `თუ ფასი ${fmtPrice(pa.invalidationLevel)}-ს გასცდება, ეს სტრუქტურა აღარ მოქმედებს (გაუქმების დონე / invalidation).`,
+    PATTERN_DISCLAIMER,
+  ].join("\n");
+}
+
+export function buildBody(alerts) {
   const sections = alerts.map((a) => {
     const hist = a.history
       .slice(-12)
@@ -395,14 +453,20 @@ function buildBody(alerts) {
     const indicators = a.readout
       ? [`ინდიკატორები: ${a.readout.summary}`, `  ${readoutMetrics(a.readout)}`]
       : [];
+    // A coin can be here for a price/drift/streak trigger, a pattern, or both —
+    // either way it is ONE card. The AI/structural note only applies to the
+    // price-trigger path; a pattern-only card skips it and shows the pattern block.
+    const tail = [];
+    if (a.reasons.length) tail.push(bodyAnalysis(a));
+    if (a.patternAlert) tail.push(patternBlockText(a.patternAlert));
     return [
       `${a.coin.toUpperCase()} — ${fmtPrice(a.price)}`,
-      `მიზეზი: ${a.reasons.join("; ")}`,
+      `მიზეზი: ${a.reasons.length ? a.reasons.join("; ") : PATTERN_REASON}`,
       ...indicators,
       `ბოლო ფასები:`,
       hist,
       ``,
-      bodyAnalysis(a),
+      tail.join("\n\n"),
     ].join("\n");
   });
   return `${sections.join("\n\n")}\n\n— Criptis`;
@@ -511,22 +575,42 @@ function htmlAnalysis(a) {
   return `<div style="border-left:3px solid #2b3139;border-radius:8px;padding:12px 16px;margin:0 0 14px;color:#848e9c;font-size:13px;line-height:1.6;">${esc(text)}</div>`;
 }
 
+// Educational chart-pattern block (HTML). Blue-accented so it reads as a neutral
+// observation, distinct from the yellow AI-analysis block. Mirrors patternBlockText
+// and carries the same three required framings; every dynamic value is escaped.
+function patternHtml(pa) {
+  const pct = `${Math.round(pa.confidence * 100)}%`;
+  return `
+        <div style="background:#0b0e11;border-left:3px solid #3b82f6;border-radius:8px;padding:14px 16px;margin:0 0 14px;">
+          <div style="color:#eaecef;font-size:13px;font-weight:700;margin-bottom:6px;">📊 გრაფიკის სტრუქტურის დაკვირვება <span style="color:#848e9c;font-weight:400;">(Chart-structure observation)</span></div>
+          <div style="color:#d6dae0;font-size:14px;margin-bottom:8px;">${esc(pa.patternName)} — <strong>ღირს გადახედვა</strong> (Worth checking) · სანდოობა ${esc(pct)}</div>
+          <div style="color:#b7bdc6;font-size:12px;line-height:1.8;margin-bottom:8px;">
+            <span style="color:#848e9c;">მხარდაჭერა (support)</span> ${esc(fmtPrice(pa.supportLevel))} ·
+            <span style="color:#848e9c;">წინააღმდეგობა (resistance)</span> ${esc(fmtPrice(pa.resistanceLevel))}<br>
+            თუ ფასი <strong>${esc(fmtPrice(pa.invalidationLevel))}</strong>-ს გასცდება, ეს სტრუქტურა აღარ მოქმედებს <span style="color:#848e9c;">(invalidation)</span>
+          </div>
+          <div style="color:#848e9c;font-size:12px;">${esc(PATTERN_DISCLAIMER)}</div>
+        </div>`;
+}
+
 // HTML twin of buildBody — a Binance-style dark card per coin with an embedded
 // chart and the coin's own analysis (or structural note). Always sent alongside
 // the plain-text body, which remains the fallback for clients that block HTML.
-function buildHtml(alerts) {
+export function buildHtml(alerts) {
   const cards = alerts.map((a) => {
     const pills = [pill(a.changePct, "1h")];
     if (a.driftPct !== null) pills.push(pill(a.driftPct, "24h"));
     if (a.streak) pills.push(pill(a.streak.netPct, `${a.streak.len} შემოწმება`));
+    const reasonLine = a.reasons.length ? esc(a.reasons.join("; ")) : PATTERN_REASON;
     return `
       <div style="background:#1e2329;border-radius:12px;padding:18px 20px;margin:0 0 16px;">
         <div style="color:#eaecef;font-size:15px;font-weight:700;letter-spacing:.5px;">${esc(a.coin.toUpperCase())}</div>
         <div style="color:#fff;font-size:30px;font-weight:700;margin:4px 0 10px;">${esc(fmtPrice(a.price))}</div>
         <div style="margin-bottom:12px;">${pills.join("")}</div>
-        <div style="color:#b7bdc6;font-size:13px;line-height:1.5;margin-bottom:14px;">${esc(a.reasons.join("; "))}</div>
+        <div style="color:#b7bdc6;font-size:13px;line-height:1.5;margin-bottom:14px;">${reasonLine}</div>
         ${readoutHtml(a.readout)}
-        ${htmlAnalysis(a)}
+        ${a.reasons.length ? htmlAnalysis(a) : ""}
+        ${a.patternAlert ? patternHtml(a.patternAlert) : ""}
         <img src="${chartUrl(a)}" alt="${esc(a.coin)} price chart" style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;" />
       </div>`;
   });
@@ -601,6 +685,10 @@ async function main() {
   }
   const now = Date.now();
   const alerts = [];
+  // Per-coin signals for EVERY priced coin (not just triggered ones), so a
+  // pattern-only alert can build a full card from the same numbers the price
+  // triggers used.
+  const coinSignals = {};
 
   for (const coin of coins) {
     const price = prices[coin];
@@ -667,19 +755,13 @@ async function main() {
     history.push({ t: now, p: price });
     if (history.length > HISTORY_LIMIT) history.splice(0, history.length - HISTORY_LIMIT);
     state.coins[coin] = entry;
+    coinSignals[coin] = { changePct: changePct ?? 0, driftPct, streak: streakInfo, history: [...history] };
 
     if (reasons.length) {
       alerts.push({ coin, price, changePct: changePct ?? 0, driftPct, streak: streakInfo, reasons, history: [...history] });
     }
     const tag = changePct === null ? " (first data point)" : ` (${fmtPct(changePct)})`;
     console.log(`${coin}: ${fmtPrice(price)}${tag}${reasons.length ? "  >> TRIGGER" : ""}`);
-  }
-
-  state.updatedAt = new Date(now).toISOString();
-  if (dryRun) {
-    console.log("Dry run: state.json not written");
-  } else {
-    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
   }
 
   // Enrichment layer: fold each coin's already-gathered OHLCV into a descriptive
@@ -707,6 +789,46 @@ async function main() {
       console.log(`${coin}: patterns — ${patterns.map((p) => `${p.patternName} ${p.confidence}`).join(", ")}`);
     }
     enrichment[coin] = { readout: r, series, patterns };
+  }
+
+  // Pattern-alert path (OPT-IN). For each priced coin, see whether its highest-
+  // confidence ACTIVE pattern clears the educational-alert bar (enabled, confidence,
+  // valid levels, cooldown). If so, record the per-pattern cooldown in state and
+  // attach the pattern to the coin's alert — creating a pattern-only alert when the
+  // coin had no price/drift/streak trigger, or MERGING into the existing alert so a
+  // coin with both is ONE card. Wrapped defensively so it can never block the state
+  // write below or weaken the price/drift/streak triggers.
+  if (patternAlertsCfg.enabled) {
+    try {
+      for (const coin of coins) {
+        if (prices[coin] === undefined) continue;
+        const entry = state.coins[coin];
+        if (!entry) continue;
+        const eligible = evaluatePatternAlert(enrichment[coin]?.patterns ?? [], entry.patternCooldowns, patternAlertsCfg, now);
+        if (!eligible) continue;
+        entry.patternCooldowns = { ...(entry.patternCooldowns ?? {}), [eligible.patternName]: now };
+        let a = alerts.find((x) => x.coin === coin);
+        if (!a) {
+          const sig = coinSignals[coin] ?? { changePct: 0, driftPct: null, streak: null, history: [...(entry.history ?? [])] };
+          a = { coin, price: prices[coin], changePct: sig.changePct, driftPct: sig.driftPct, streak: sig.streak, reasons: [], history: sig.history };
+          alerts.push(a);
+        }
+        a.patternAlert = eligible;
+        console.log(`${coin}: pattern alert — ${eligible.patternName} (conf ${eligible.confidence})`);
+      }
+    } catch (err) {
+      console.error(`Pattern-alert evaluation failed — skipping pattern alerts: ${err.message}`);
+    }
+  }
+
+  // State is written HERE (after the cooldown updates above) so per-pattern cooldown
+  // timestamps persist alongside the trigger loop's history + drift-latch updates.
+  // On --dry-run nothing is written, so cooldowns are not persisted (preview only).
+  state.updatedAt = new Date(now).toISOString();
+  if (dryRun) {
+    console.log("Dry run: state.json not written");
+  } else {
+    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
   }
 
   // Publish the dashboard feed every run (even with no alert): the spot price used
@@ -760,6 +882,13 @@ async function main() {
   // (raw-metrics) alert. Each coin is judged independently, so one combined email
   // can carry AI paragraphs for the breakouts and raw numbers for the rest.
   for (const a of alerts) {
+    // A pattern-only alert (no price/drift/streak reason) is fully deterministic —
+    // it never touches the Bollinger pre-filter or the LLM.
+    if (!a.reasons.length) {
+      a.prefilter = null;
+      a.analysis = null;
+      continue;
+    }
     const pf = breakoutPrefilter(a.series);
     a.prefilter = pf;
     if (!pf.pass) {

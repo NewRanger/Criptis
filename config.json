@@ -3,6 +3,11 @@
   "changeThresholdPct": 1.5,
   "driftThresholdPct": 4,
   "streakLength": 3,
+  "patternAlerts": {
+    "enabled": false,
+    "minConfidence": 0.75,
+    "cooldownHours": 12
+  },
   "email": {
     "to": ["ohsomeonesin@gmail.com", "lexoleqso@gmail.com"],
     "from": "Criptis <alerts@criptis.dev>"

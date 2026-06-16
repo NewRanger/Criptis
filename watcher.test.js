@@ -5,7 +5,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { derivePrices, driftDecision, summaryHtml, summaryToText, toPublicPatterns } from "./watcher.js";
+import {
+  derivePrices, driftDecision, summaryHtml, summaryToText, toPublicPatterns,
+  evaluatePatternAlert, buildBody, buildHtml,
+} from "./watcher.js";
 import { ascendingTriangle } from "./patterns/fixtures/synth.js";
 
 // --- BUG 1: derived-price validation (latest close, never zeroed) ------------
@@ -138,6 +141,108 @@ test("toPublicPatterns end-to-end: a real Ascending Triangle series yields a cle
   assert.equal(out[0].patternName, "Ascending Triangle");
   for (const k of PUBLIC_PATTERN_FIELDS) assert.ok(k in out[0], `missing ${k}`);
   assert.ok(out[0].confidence > 0 && out[0].confidence <= 1);
+});
+
+// --- Pattern alerts (opt-in, educational) ------------------------------------
+
+const HOUR = 3_600_000;
+const PATTERN = {
+  patternName: "Rising Wedge", confidence: 0.9,
+  supportLevel: 64000, resistanceLevel: 66000, invalidationLevel: 66000,
+  bullishBias: 0.15, bearishBias: 0.66,
+};
+const ENABLED = { enabled: true, minConfidence: 0.75, cooldownHours: 12 };
+
+test("pattern alerts are OFF by default — enabled:false never alerts", () => {
+  assert.equal(evaluatePatternAlert([PATTERN], {}, { ...ENABLED, enabled: false }, 1000), null);
+  assert.equal(evaluatePatternAlert([PATTERN], {}, undefined, 1000), null, "missing config -> off");
+});
+
+test("a pattern below minConfidence does not alert", () => {
+  assert.equal(evaluatePatternAlert([{ ...PATTERN, confidence: 0.5 }], {}, ENABLED, 1000), null);
+});
+
+test("a high-confidence active pattern alerts when enabled", () => {
+  const r = evaluatePatternAlert([PATTERN], {}, ENABLED, 1000);
+  assert.equal(r?.patternName, "Rising Wedge");
+});
+
+test("a pattern missing any valid level (support/resistance/invalidation) does not alert", () => {
+  for (const bad of [{ supportLevel: null }, { resistanceLevel: NaN }, { invalidationLevel: undefined }]) {
+    assert.equal(evaluatePatternAlert([{ ...PATTERN, ...bad }], {}, ENABLED, 1000), null, JSON.stringify(bad));
+  }
+});
+
+test("cooldown suppresses a repeat of the same coin+pattern within cooldownHours", () => {
+  const now = 100 * HOUR;
+  // alerted 6h ago, cooldown is 12h -> still muted
+  assert.equal(evaluatePatternAlert([PATTERN], { "Rising Wedge": now - 6 * HOUR }, ENABLED, now), null);
+  // alerted 13h ago -> past cooldown, alerts again
+  assert.ok(evaluatePatternAlert([PATTERN], { "Rising Wedge": now - 13 * HOUR }, ENABLED, now));
+  // a DIFFERENT pattern on the same coin is not muted by another's cooldown
+  const other = { ...PATTERN, patternName: "Channel Up" };
+  assert.ok(evaluatePatternAlert([other], { "Rising Wedge": now - 1 * HOUR }, ENABLED, now));
+});
+
+test("evaluatePatternAlert returns the HIGHEST-confidence eligible pattern", () => {
+  const lo = { ...PATTERN, patternName: "Lo", confidence: 0.8 };
+  const hi = { ...PATTERN, patternName: "Hi", confidence: 0.95 };
+  assert.equal(evaluatePatternAlert([lo, hi], {}, ENABLED, 1000).patternName, "Hi");
+});
+
+// --- email rendering: combination + safety -----------------------------------
+
+const PA = { patternName: "Channel Up", confidence: 0.82, supportLevel: 64000, resistanceLevel: 66000, invalidationLevel: 64000 };
+function priceAlert(extra = {}) {
+  return {
+    coin: "bitcoin", price: 65000, changePct: 2.0, driftPct: null, streak: null,
+    reasons: ["+2.00% ბოლო შემოწმების შემდეგ (ზღვარი 1.5%)"],
+    history: [{ t: 1000, p: 64000 }, { t: 2000, p: 65000 }],
+    readout: null, analysis: null, prefilter: { pass: false, reason: "x" },
+    ...extra,
+  };
+}
+
+test("existing price-trigger alert still renders its reason and NO pattern block", () => {
+  const body = buildBody([priceAlert()]);
+  assert.match(body, /BITCOIN/);
+  assert.match(body, /მიზეზი:/);
+  assert.doesNotMatch(body, /Chart-structure observation/, "no pattern block when there is no pattern");
+});
+
+test("a coin with BOTH a price trigger and a pattern renders ONE combined card", () => {
+  const body = buildBody([priceAlert({ patternAlert: PA })]);
+  assert.equal((body.match(/BITCOIN —/g) || []).length, 1, "one card, not two");
+  assert.match(body, /მიზეზი:.*ბოლო შემოწმების/, "keeps the price-trigger reason");
+  assert.match(body, /Chart-structure observation/, "and adds the pattern observation");
+  assert.match(body, /Channel Up/);
+});
+
+test("a pattern-only alert renders the educational block and NOT the 'analysis unavailable' line", () => {
+  const body = buildBody([priceAlert({ reasons: [], patternAlert: PA })]);
+  assert.match(body, /Chart-structure observation/);
+  assert.doesNotMatch(body, /ანალიზი დროებით მიუწვდომელია/, "pattern-only cards skip the AI note");
+  assert.match(body, /chart pattern observed/, "reason line marks the pattern observation");
+});
+
+test("pattern email uses the required educational framing and NO buy/sell instruction", () => {
+  const body = buildBody([priceAlert({ reasons: [], patternAlert: PA })]);
+  // the three required safety framings are present
+  assert.match(body, /Worth checking/);
+  assert.match(body, /Chart-structure observation/);
+  assert.match(body, /Not a buy\/sell instruction/);
+  // OUTSIDE the explicit disclaimer line, there is no buy/sell / action language
+  const withoutDisclaimer = body.replace(/.*Not a buy\/sell instruction.*\n?/g, "");
+  assert.doesNotMatch(withoutDisclaimer, /\b(buy|sell|long|short|target|leverage)\b/i, "no buy/sell language outside the disclaimer");
+  // and no Georgian buy/sell IMPERATIVES anywhere
+  assert.doesNotMatch(body, /(იყიდე|გაყიდე|შეიძინე|გაასხვისე)/);
+});
+
+test("the HTML email also combines into one card and carries the disclaimer", () => {
+  const html = buildHtml([priceAlert({ patternAlert: PA })]);
+  assert.equal((html.match(/BITCOIN/g) || []).length, 1, "one card");
+  assert.match(html, /Chart-structure observation/);
+  assert.match(html, /Not a buy\/sell instruction/);
 });
 
 // --- georgianSummary rendering: the LLM's HTML string -> email (HTML + text) ---
