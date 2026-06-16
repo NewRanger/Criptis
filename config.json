@@ -1,8 +1,8 @@
 {
   "coins": ["bitcoin", "ethereum", "solana", "ripple", "dogecoin"],
-  "changeThresholdPct": 1.5,
-  "driftThresholdPct": 4,
-  "streakLength": 3,
+  "changeThresholdPct": null,
+  "driftThresholdPct": null,
+  "streakLength": null,
   "patternAlerts": {
     "enabled": true,
     "minConfidence": 0.75,

@@ -38,9 +38,13 @@ if (mockIdx !== -1 && !Number.isFinite(mockPrice)) {
 
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
 const coins = config.coins ?? ["bitcoin"];
-const changeThresholdPct = config.changeThresholdPct ?? 2;
-const driftThresholdPct = config.driftThresholdPct ?? 5;
-const streakLength = config.streakLength ?? 5; // consecutive same-direction checks that flag a trend
+// Each price/drift/streak trigger is active ONLY when its config value is a finite
+// number; set it to null (or remove the key) to PAUSE that trigger. With all three
+// paused, only the opt-in pattern alerts below can raise an email. (streakLength
+// additionally needs >= 2 to mean anything, so 0/1/null all read as paused.)
+const changeThresholdPct = Number.isFinite(config.changeThresholdPct) ? config.changeThresholdPct : null;
+const driftThresholdPct = Number.isFinite(config.driftThresholdPct) ? config.driftThresholdPct : null;
+const streakLength = Number.isFinite(config.streakLength) ? config.streakLength : null; // consecutive same-direction checks that flag a trend; null/<2 = paused
 
 // Optional pattern-alert path — DISABLED by default. A detected chart pattern can
 // raise an educational "worth checking" email only when explicitly enabled and the
@@ -818,7 +822,7 @@ async function main() {
     const driftPct = ref ? pct(ref.p, price) : null;
 
     const reasons = [];
-    if (changePct !== null && Math.abs(changePct) > changeThresholdPct) {
+    if (changeThresholdPct !== null && changePct !== null && Math.abs(changePct) > changeThresholdPct) {
       reasons.push(`${fmtPct(changePct)} ბოლო შემოწმების შემდეგ (ზღვარი ${changeThresholdPct}%)`);
     }
     // BUG-2: drift is edge-triggered via a per-coin latch so a sustained move
@@ -828,7 +832,7 @@ async function main() {
     // means no episode → latch stays disarmed at 0.
     const prevDriftDir = entry.lastDriftDir ?? 0;
     let driftDir = 0;
-    if (driftPct !== null) {
+    if (driftPct !== null && driftThresholdPct !== null) {
       const decision = driftDecision(driftPct, driftThresholdPct, prevDriftDir, DRIFT_REARM);
       driftDir = decision.nextDir;
       if (decision.fire) {

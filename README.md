@@ -89,9 +89,11 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
 ```
 
 - **coins** — coin ids (`bitcoin`, `ethereum`, `solana`, …). Each maps to a Coinbase USD pair via `COINBASE_PRODUCTS` in `datasource.js`; adding a coin not in that map logs a warning and skips it, so add the mapping (e.g. `litecoin: "LTC-USD"`) when you add a coin.
-- **changeThresholdPct** — alert when the move since the last check (~2h) exceeds this. Lower = noisier.
-- **driftThresholdPct** — alert when the price has drifted this far from ~24h ago, even if each 2h step was small. Catches slow bleeds.
-- **streakLength** — alert when this many checks in a row (~2h each) move the same direction, even if no single step or the 24h drift crossed a threshold. Catches a steady grind. Fires once when the streak forms, then stays quiet until it breaks. Default 5 (~10h); set higher to require a longer trend.
+- **changeThresholdPct** — alert when the move since the last check (~2h) exceeds this. Lower = noisier. Set to `null` to **pause** this trigger.
+- **driftThresholdPct** — alert when the price has drifted this far from ~24h ago, even if each 2h step was small. Catches slow bleeds. Set to `null` to **pause** this trigger.
+- **streakLength** — alert when this many checks in a row (~2h each) move the same direction, even if no single step or the 24h drift crossed a threshold. Catches a steady grind. Fires once when the streak forms, then stays quiet until it breaks. Default 5 (~10h); set higher to require a longer trend, or `null` to **pause** this trigger.
+
+> **Note:** all three price triggers (`changeThresholdPct`, `driftThresholdPct`, `streakLength`) are currently `null` (paused) — only the opt-in **patternAlerts** path raises emails. Restore the numeric values (e.g. `1.5` / `4` / `3`) to re-enable them.
 - **email.to** — optional fallback recipient(s) (a string or an array) used only when the `ALERT_RECIPIENTS` env var is unset. Prefer `ALERT_RECIPIENTS` (see Setup §1) so addresses aren't committed; if you do list any here, put the Resend **account-owner** address **first**.
 - **email.from** — sender; must be `onboarding@resend.dev` or an address on a domain you've verified in Resend.
 
