@@ -1,66 +1,77 @@
-// Unit tests for resampleHourly in datasource.js.
+// Unit tests for the pure helpers in datasource.js (Coinbase OHLCV).
 // Run with:  node --test
-// Pure helper — no network. parseMarketChart is exercised indirectly; its own
-// behaviour is unchanged by the resample work.
+// parseCandles + productFor are pure — no network. fetchSeries does I/O and is
+// exercised manually (node watcher.js --dry-run), not here.
 
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resampleHourly } from "./datasource.js";
+import { parseCandles, productFor, COINBASE_PRODUCTS } from "./datasource.js";
 
-const MIN = 60_000;
-const base = 1609459200000; // 2021-01-01T00:00:00.000Z — exactly on a UTC hour boundary
+const baseS = 1609459200; // 2021-01-01T00:00:00Z in SECONDS (Coinbase candle time unit)
+const HOUR = 3600;
 
-test("resampleHourly collapses a multi-hour 5-min series to one point per UTC hour (last close/volume)", () => {
-  // Two full hours of 5-min points plus a partial third hour. Each point gets a
-  // unique close (100+i) and volume (1000+i) so "last in the hour" is verifiable
-  // and a sum would be obviously wrong.
-  const times = [], closes = [], volumes = [];
-  let i = 0;
-  const push = (m) => { times.push(base + m * MIN); closes.push(100 + i); volumes.push(1000 + i); i++; };
-  for (let m = 0;   m < 60;   m += 5) push(m); // hour 0: 12 pts (0..55)
-  for (let m = 60;  m < 120;  m += 5) push(m); // hour 1: 12 pts (60..115)
-  for (let m = 120; m <= 125; m += 5) push(m); // hour 2 (partial): 2 pts (120, 125)
+test("parseCandles sorts newest-first rows oldest-first, splits OHLCV, converts s->ms", () => {
+  // Coinbase returns [ time(s), low, high, open, close, volume ], newest first.
+  const rows = [
+    [baseS + 2 * HOUR, 9, 11, 10, 10.5, 100],
+    [baseS + 1 * HOUR, 8, 10, 9, 9.5, 90],
+    [baseS, 7, 9, 8, 8.5, 80],
+  ];
 
-  const r = resampleHourly(times, closes, volumes);
+  const s = parseCandles(rows, { hours: 48 });
 
-  assert.equal(r.closes.length, 3, "three UTC hours -> three points");
-  assert.deepEqual(r.closes, [111, 123, 125], "close = LAST price in each hour");
-  assert.deepEqual(r.volumes, [1011, 1023, 1025], "volume = LAST value in each hour (not a sum)");
-  assert.deepEqual(r.times, [base + 55 * MIN, base + 115 * MIN, base + 125 * MIN], "time = last point's timestamp");
-  assert.ok(r.times[0] < r.times[1] && r.times[1] < r.times[2], "output stays chronological");
+  assert.deepEqual(s.times, [baseS * 1000, (baseS + HOUR) * 1000, (baseS + 2 * HOUR) * 1000], "oldest-first, ms");
+  assert.deepEqual(s.opens, [8, 9, 10]);
+  assert.deepEqual(s.highs, [9, 10, 11]);
+  assert.deepEqual(s.lows, [7, 8, 9]);
+  assert.deepEqual(s.closes, [8.5, 9.5, 10.5], "closes.at(-1) is the latest close");
+  assert.deepEqual(s.volumes, [80, 90, 100]);
 });
 
-test("resampleHourly: partial final hour yields just its last point", () => {
-  const times  = [base, base + 30 * MIN, base + 59 * MIN, base + 65 * MIN]; // hour 0 x3, hour 1 x1
-  const closes = [10, 11, 12, 99];
-  const volumes = [1, 2, 3, 9];
-  const r = resampleHourly(times, closes, volumes);
-  assert.equal(r.closes.length, 2);
-  assert.deepEqual(r.closes, [12, 99], "first hour -> its last close; partial hour -> its lone point");
-  assert.deepEqual(r.volumes, [3, 9]);
+test("parseCandles drops malformed rows (non-array, short, non-finite OHLC/time, non-positive close)", () => {
+  const rows = [
+    [baseS, 1, 2, 1.5, 1.8, 10], // the only valid candle
+    "nope", // not an array
+    [baseS + HOUR, 1, 2, 1.5], // too short
+    [baseS + 2 * HOUR, 1, 2, 1.5, NaN, 5], // non-finite close
+    [baseS + 3 * HOUR, 1, 2, 1.5, -3, 5], // non-positive close (would read as a bad price)
+    [NaN, 1, 2, 1.5, 2, 5], // non-finite time
+  ];
+
+  const s = parseCandles(rows);
+  assert.deepEqual(s.closes, [1.8], "only the single valid candle survives");
+  assert.deepEqual(s.times, [baseS * 1000]);
 });
 
-test("resampleHourly carries the last reading even when it is null, and never sums", () => {
-  const times   = [base, base + 10 * MIN, base + 20 * MIN]; // all in hour 0
-  const closes  = [10, 11, 12];
-  const volumes = [5, null, null]; // last reading in the hour is null
-  const r = resampleHourly(times, closes, volumes);
-  assert.deepEqual(r.closes, [12]);
-  assert.deepEqual(r.volumes, [null], "carries the last value (null), not a sum of 5");
+test("parseCandles keeps a non-finite volume as null, never coerces it to 0", () => {
+  const s = parseCandles([[baseS, 1, 2, 1.5, 1.8, "x"]]);
+  assert.deepEqual(s.volumes, [null], "missing volume -> null (a 0 would fake 'no trading')");
+  assert.deepEqual(s.closes, [1.8]);
 });
 
-test("resampleHourly degrades on empty / missing / single-point input without throwing", () => {
-  assert.deepEqual(resampleHourly([], [], []), { times: [], closes: [], volumes: [] });
-  assert.deepEqual(resampleHourly(undefined, undefined, undefined), { times: [], closes: [], volumes: [] });
-  assert.deepEqual(resampleHourly([base], [42], [7]), { times: [base], closes: [42], volumes: [7] });
+test("parseCandles keeps only the most recent `hours` candles", () => {
+  const rows = [];
+  for (let i = 0; i < 60; i++) rows.push([baseS + i * HOUR, i, i + 2, i, i + 1, i]); // 60h, ascending here
+  const s = parseCandles(rows, { hours: 48 });
+  assert.equal(s.closes.length, 48, "trimmed to the last 48 hourly candles");
+  assert.equal(s.times[0], (baseS + 12 * HOUR) * 1000, "first kept candle is 12h in (60 - 48)");
+  assert.equal(s.closes.at(-1), 60, "last close is the newest candle's");
 });
 
-test("resampleHourly skips non-finite timestamps", () => {
-  const times   = [base, NaN, base + 30 * MIN];
-  const closes  = [10, 999, 12];
-  const volumes = [1, 999, 3];
-  const r = resampleHourly(times, closes, volumes);
-  assert.deepEqual(r.closes, [12], "the NaN-timestamped row is dropped, hour 0 keeps its last valid point");
-  assert.deepEqual(r.volumes, [3]);
+test("parseCandles degrades on empty / missing / non-array input without throwing", () => {
+  assert.deepEqual(parseCandles([]), { times: [], opens: [], highs: [], lows: [], closes: [], volumes: [] });
+  assert.deepEqual(parseCandles(undefined), { times: [], opens: [], highs: [], lows: [], closes: [], volumes: [] });
+  assert.deepEqual(parseCandles({ not: "rows" }), { times: [], opens: [], highs: [], lows: [], closes: [], volumes: [] });
+});
+
+test("productFor maps known coins, honours an override, throws for an unmapped coin", () => {
+  assert.equal(productFor("bitcoin"), "BTC-USD");
+  assert.equal(productFor("ripple"), "XRP-USD", "config uses CoinGecko ids; ripple -> XRP-USD");
+  assert.equal(productFor("bitcoin", "BTC-EUR"), "BTC-EUR", "explicit override wins");
+  assert.throws(() => productFor("not-a-coin"), /no Coinbase product mapping/);
+  // every coin in the default config.json must have a mapping
+  for (const id of ["bitcoin", "ethereum", "solana", "ripple", "dogecoin"]) {
+    assert.ok(COINBASE_PRODUCTS[id], `${id} is mapped`);
+  }
 });

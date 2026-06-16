@@ -2,14 +2,17 @@
 
 Crypto price watcher that runs entirely on GitHub Actions — no server, no local cron.
 
-Every hour a workflow runs `watcher.js`, which fetches prices from CoinGecko, compares them against the committed `state.json`, and **only when a deterministic trigger fires** calls the Anthropic API for a one-paragraph analysis and emails you via Resend. The LLM is never the polling loop — it only writes the analysis after a trigger.
+Every hour a workflow runs `watcher.js`, which gathers professional-grade market data — 48h of true hourly OHLCV candles per coin from the Coinbase public API, plus a few recent news headlines (CryptoPanic) — derives the latest price, compares it against the committed `state.json`, and **only when a deterministic trigger fires** calls the Anthropic API for a one-paragraph analysis and emails you via Resend. The LLM is never the polling loop — it only writes the analysis after a trigger.
 
 ## How it works
 
 ```
 GitHub Actions (cron hourly)
   └─ watcher.js
-       ├─ fetch prices (CoinGecko, free, no key; retry once → exit 1)
+       ├─ gather market data (before any trigger is evaluated):
+       │    • OHLCV — 48h of hourly candles per coin (Coinbase, free, no key; retry once)
+       │    • news  — top 3 headlines (CryptoPanic, optional key; [] if missing/fails)
+       ├─ derive spot price = latest close (missing ≠ 0); no coin priced → exit 1
        ├─ load state.json, keep last 48 price points per coin (~48h)
        ├─ trigger if:
        │    • change since last check  > 1.5%  (changeThresholdPct)
@@ -35,7 +38,11 @@ GitHub Actions (cron hourly)
 
 Get an API key from [console.anthropic.com](https://console.anthropic.com). Alerts still work without it (raw numbers, no analysis paragraph), but you want the paragraph.
 
-### 3. Repo secrets
+### 3. CryptoPanic (optional — news headlines)
+
+Get a free auth token at [cryptopanic.com/developers/api](https://cryptopanic.com/developers/api/). It adds recent crypto news headlines to the analysis context. Entirely optional: without the key (or on any failure) the watcher just runs with no news — prices, triggers and email are unaffected. Prices come from Coinbase and never need a key.
+
+### 4. Repo secrets
 
 In the GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**
 
@@ -43,10 +50,11 @@ In the GitHub repo: **Settings → Secrets and variables → Actions → New rep
 |---|---|
 | `RESEND_API_KEY` | your `re_...` key |
 | `ANTHROPIC_API_KEY` | your `sk-ant-...` key |
+| `CRYPTOPANIC_API_KEY` | your CryptoPanic auth token (optional) |
 
 Never put keys in `config.json` — it's committed.
 
-### 4. Enable the workflow
+### 5. Enable the workflow
 
 Push the repo, then check **Actions** tab → enable workflows if prompted. Test immediately with **Criptis watch → Run workflow** (manual dispatch). The first run only seeds history — alerts need at least two data points.
 
@@ -67,7 +75,7 @@ Note: GitHub disables scheduled workflows after 60 days without repo activity; t
 }
 ```
 
-- **coins** — CoinGecko ids (`bitcoin`, `ethereum`, `solana`, …). Find ids at coingecko.com on the coin page ("API ID").
+- **coins** — coin ids (`bitcoin`, `ethereum`, `solana`, …). Each maps to a Coinbase USD pair via `COINBASE_PRODUCTS` in `datasource.js`; adding a coin not in that map logs a warning and skips it, so add the mapping (e.g. `litecoin: "LTC-USD"`) when you add a coin.
 - **changeThresholdPct** — alert when the move since the last check (~2h) exceeds this. Lower = noisier.
 - **driftThresholdPct** — alert when the price has drifted this far from ~24h ago, even if each 2h step was small. Catches slow bleeds.
 - **streakLength** — alert when this many checks in a row (~2h each) move the same direction, even if no single step or the 24h drift crossed a threshold. Catches a steady grind. Fires once when the streak forms, then stays quiet until it breaks. Default 5 (~10h); set higher to require a longer trend.

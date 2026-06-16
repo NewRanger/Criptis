@@ -5,21 +5,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parsePrices, driftDecision } from "./watcher.js";
+import { derivePrices, driftDecision } from "./watcher.js";
 
-// --- BUG 1: fetched-price validation -----------------------------------------
+// --- BUG 1: derived-price validation (latest close, never zeroed) ------------
 
-test("parsePrices keeps valid coins and skips missing / non-positive prices", () => {
+test("derivePrices keeps valid coins and skips missing / non-positive last closes", () => {
   const ids = ["bitcoin", "ethereum", "solana", "dogecoin"];
-  // A fabricated simple/price body: one valid, one non-positive, one missing, one valid.
-  const data = {
-    bitcoin: { usd: 65000 }, // valid
-    ethereum: { usd: 0 },    // non-positive -> skip (would become a fake 0% move)
-    // solana absent entirely -> skip (a 429/partial body drops a coin)
-    dogecoin: { usd: 0.4231 }, // valid sub-$1 coin
+  // A gathered OHLCV map: one valid, one non-positive, one missing (fetch failed),
+  // one valid. Each entry is the normalized series; only `last` matters here.
+  const ohlcv = {
+    bitcoin: { last: 65000 }, // valid
+    ethereum: { last: 0 },    // non-positive -> skip (would become a fake 0% move)
+    // solana absent entirely -> skip (its Coinbase fetch failed)
+    dogecoin: { last: 0.4231 }, // valid sub-$1 coin
   };
 
-  const { prices, skipped } = parsePrices(data, ids);
+  const { prices, skipped } = derivePrices(ohlcv, ids);
 
   // Valid coins pass through unchanged...
   assert.deepEqual(prices, { bitcoin: 65000, dogecoin: 0.4231 });
@@ -27,32 +28,33 @@ test("parsePrices keeps valid coins and skips missing / non-positive prices", ()
   assert.deepEqual([...skipped].sort(), ["ethereum", "solana"]);
 });
 
-test("parsePrices skips every shape of invalid usd (negative, NaN, null, string, undefined)", () => {
+test("derivePrices skips every shape of invalid last (negative, NaN, null, string, undefined)", () => {
   const ids = ["a", "b", "c", "d", "e", "f"];
-  const data = {
-    a: { usd: -100 },     // negative
-    b: { usd: NaN },      // NaN
-    c: { usd: null },     // null
-    d: { usd: "65000" },  // string, not a number
-    e: {},                // present but no usd
-    f: { usd: 42 },       // the only valid one
+  const ohlcv = {
+    a: { last: -100 },    // negative
+    b: { last: NaN },     // NaN
+    c: { last: null },    // null
+    d: { last: "65000" }, // string, not a number
+    e: {},                // present but no last (empty series)
+    f: { last: 42 },      // the only valid one
   };
 
-  const { prices, skipped } = parsePrices(data, ids);
+  const { prices, skipped } = derivePrices(ohlcv, ids);
 
   assert.deepEqual(prices, { f: 42 });
   assert.deepEqual([...skipped].sort(), ["a", "b", "c", "d", "e"]);
 });
 
-test("parsePrices on a total failure yields no prices and skips all (caller throws -> retry/exit)", () => {
+test("derivePrices on a total failure (no OHLCV) yields no prices and skips all (caller throws -> exit)", () => {
   const ids = ["bitcoin", "ethereum"];
-  const data = { status: { error_code: 429 } }; // CoinGecko rate-limit body, no coins
 
-  const { prices, skipped } = parsePrices(data, ids);
+  const { prices, skipped } = derivePrices({}, ids); // Coinbase unreachable -> empty map
 
   assert.deepEqual(prices, {});
   assert.deepEqual(skipped, ["bitcoin", "ethereum"]);
-  assert.equal(Object.keys(prices).length, 0); // fetchPrices treats this as total failure
+  assert.equal(Object.keys(prices).length, 0); // main() treats this as a total failure
+  // a missing/undefined map is handled the same way, never throwing or zeroing
+  assert.deepEqual(derivePrices(undefined, ids).prices, {});
 });
 
 // --- BUG 2: drift edge-trigger latch -----------------------------------------

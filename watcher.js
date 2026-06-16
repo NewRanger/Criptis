@@ -8,7 +8,8 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { fetchSeries } from "./datasource.js";
-import { readout } from "./indicators.js";
+import { fetchNews } from "./news.js";
+import { readout, breakoutPrefilter } from "./indicators.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "config.json");
@@ -68,7 +69,7 @@ function readoutMetrics(r) {
   const parts = [`direction ${r.direction}`];
   if (r.rsi != null) parts.push(`RSI ${r.rsi.toFixed(0)}`);
   if (r.pctB != null) parts.push(`%B ${Math.round(r.pctB * 100)}%`);
-  // "/hr" label is accurate because the enrichment series is hourly (fetchSeries days:1).
+  // "/hr" label is accurate because the series is hourly Coinbase candles (granularity=3600).
   if (r.momentumPctPerStep != null) parts.push(`momentum ${fmtPct(r.momentumPctPerStep)}/hr`);
   if (r.volume) parts.push(`volume ${r.volume.rising ? "rising" : "easing"}`);
   return parts.join(" · ");
@@ -109,87 +110,126 @@ export function driftDecision(driftPct, threshold, prevDir, reArm) {
   return { fire, nextDir };
 }
 
-// --- Prices (CoinGecko, retry once then exit 1) -------------------------------
+// --- Market data: OHLCV (Coinbase) + news (CryptoPanic) -----------------------
 
-// Validate a CoinGecko simple/price body into { prices, skipped }. A price counts
-// only if it's a finite, positive number; a missing coin, a 429/error body, or a
-// malformed entry yields no price for that id (it lands in `skipped`) rather than an
-// undefined that would become NaN downstream and poison the rolling history. Pure.
-export function parsePrices(data, ids) {
+// Derive the spot price per coin from the gathered OHLCV — the latest close.
+// A price counts only if it's a finite, positive number; a coin missing from the
+// OHLCV map (a failed/unmapped fetch) or carrying a bad last close lands in
+// `skipped` rather than an undefined/0 that would become a fake move downstream
+// and poison the rolling history. Pure — mirrors the old parsePrices contract.
+export function derivePrices(ohlcv, ids) {
   const prices = {};
   const skipped = [];
   for (const id of ids) {
-    const usd = data?.[id]?.usd;
-    if (Number.isFinite(usd) && usd > 0) prices[id] = usd;
+    const last = ohlcv?.[id]?.last;
+    if (Number.isFinite(last) && last > 0) prices[id] = last;
     else skipped.push(id);
   }
   return { prices, skipped };
 }
 
-async function fetchPrices(ids) {
+// Gather all market data for the run BEFORE any trigger is evaluated: 48h of true
+// hourly OHLCV per coin (Coinbase) and a few recent news headlines (CryptoPanic).
+// Returns { ohlcv: { coinId -> series }, news: string[] } held for the run so the
+// SAME data feeds the triggers, the (upcoming) pre-filter, the descriptive readout
+// and the analyze() LLM payload — each coin's candles are fetched exactly once.
+//
+// Resilience: OHLCV and news are fetched concurrently. fetchNews never rejects; a
+// coin whose OHLCV fetch fails is OMITTED from `ohlcv` (logged, never stored as 0)
+// so derivePrices later skips it. Mock mode synthesizes a flat price and skips the
+// network entirely so `--dry-run --mock-price` stays fully offline.
+async function gatherMarket(coins) {
   if (mockPrice !== null) {
-    console.log(`Mock mode: using ${fmtPrice(mockPrice)} for all coins, skipping CoinGecko`);
-    return Object.fromEntries(ids.map((id) => [id, mockPrice]));
-  }
-  const url =
-    "https://api.coingecko.com/api/v3/simple/price" +
-    `?ids=${encodeURIComponent(ids.join(","))}&vs_currencies=usd`;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const { prices, skipped } = parsePrices(data, ids);
-      // Total failure (nothing valid — e.g. a 429/error body) drops into the
-      // retry/exit path below. A partial failure keeps the valid coins and skips
-      // the rest, logging which so a missing coin is visible, not silent.
-      if (Object.keys(prices).length === 0) {
-        throw new Error(`no valid prices in response (checked ${ids.length} coin(s))`);
-      }
-      if (skipped.length) {
-        console.warn(`Skipping coins with no valid price this run: ${skipped.join(", ")}`);
-      }
-      return prices;
-    } catch (err) {
-      console.error(`CoinGecko attempt ${attempt}/2 failed: ${err.message}`);
-      if (attempt === 2) throw new Error(`CoinGecko unreachable after retry: ${err.message}`);
-      await new Promise((r) => setTimeout(r, 5_000));
+    console.log(`Mock mode: using ${fmtPrice(mockPrice)} for all coins, skipping Coinbase + news`);
+    const ohlcv = {};
+    for (const coin of coins) {
+      ohlcv[coin] = {
+        coinId: coin,
+        last: mockPrice,
+        times: [], opens: [], highs: [], lows: [], closes: [], volumes: [],
+      };
     }
+    return { ohlcv, news: [] };
   }
+
+  const [news, ...seriesResults] = await Promise.all([
+    fetchNews(),
+    ...coins.map((coin) =>
+      fetchSeries(coin, { hours: HISTORY_LIMIT }).then(
+        (series) => ({ coin, series }),
+        (err) => {
+          console.error(`Coinbase OHLCV for ${coin} failed — skipped: ${err.message}`);
+          return { coin, series: null };
+        },
+      ),
+    ),
+  ]);
+
+  const ohlcv = {};
+  for (const { coin, series } of seriesResults) if (series) ohlcv[coin] = series;
+  console.log(`News: ${news.length ? `${news.length} headline(s)` : "none"}`);
+  return { ohlcv, news };
 }
 
 // --- Analysis (Anthropic; failure must never block the email) -----------------
 
-async function analyze(alerts) {
+// Write the analysis paragraph for ONE coin that cleared the breakout pre-filter.
+// Receives the coin's alert data (with its full 48h OHLC candle array) and the
+// shared news headlines, and returns the paragraph (or null if the key is unset
+// or the call fails — the email still goes out with raw numbers for that coin).
+async function analyze(coinData, news = []) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error("ANTHROPIC_API_KEY not set — sending raw numbers only");
     return null;
   }
   const system = fs.readFileSync(PROMPT_PATH, "utf8");
-  const userMsg = alerts
-    .map((a) => {
-      const lines = a.history.map((p) => `${fmtTime(p.t)}  ${fmtPrice(p.p)}`).join("\n");
-      const drift = a.driftPct === null ? "" : `, ${fmtPct(a.driftPct)} vs ~24h ago`;
-      // Descriptive technical readout from a dense hourly series (null if the
-      // enrichment fetch failed). Ground the paragraph in these numbers; the
-      // system prompt still forbids predictions / buy-sell advice.
-      const indicators = a.readout
-        ? [
-            `indicators (descriptive, from a dense hourly series): ${a.readout.summary}`,
-            `  ${readoutMetrics(a.readout)}${a.readout.r2 != null ? ` · R² ${a.readout.r2.toFixed(2)} (${a.readout.cleanliness})` : ""}`,
-          ].join("\n")
-        : "indicators: unavailable for this coin";
-      return [
-        `## ${a.coin}`,
-        `current: ${fmtPrice(a.price)} (${fmtPct(a.changePct)} since last check${drift})`,
-        `triggered by: ${a.reasons.join("; ")}`,
-        indicators,
-        `price history, oldest first (~1h between points):`,
-        lines,
-      ].join("\n");
-    })
-    .join("\n\n");
+  const a = coinData;
+  // Recent news headlines, passed forward as context when present. Empty (no key
+  // / fetch failed) => omitted entirely, so the payload is unchanged in that case.
+  const newsBlock = news.length
+    ? "# Recent crypto news headlines (last 24h)\n" + news.map((h) => `- ${h}`).join("\n") + "\n\n"
+    : "";
+  const drift = a.driftPct === null ? "" : `, ${fmtPct(a.driftPct)} vs ~24h ago`;
+  // Descriptive technical readout from the dense hourly series (null if the
+  // enrichment failed). Ground the paragraph in these numbers; the system prompt
+  // still forbids predictions / buy-sell advice.
+  const indicators = a.readout
+    ? [
+        `indicators (descriptive, from a dense hourly series): ${a.readout.summary}`,
+        `  ${readoutMetrics(a.readout)}${a.readout.r2 != null ? ` · R² ${a.readout.r2.toFixed(2)} (${a.readout.cleanliness})` : ""}`,
+      ].join("\n")
+    : "indicators: unavailable for this coin";
+  // Why this coin earned an analysis: the mathematical breakout the pre-filter
+  // confirmed. Surfaced as data the paragraph can lean on (volume credibility,
+  // how stretched the move is) — facts, not an instruction to predict.
+  const pf = a.prefilter;
+  const breakoutLine =
+    pf && pf.pass
+      ? `breakout pre-filter: confirmed ${pf.breakout} breakout — latest close ${fmtPrice(pf.close)} ` +
+        `${pf.breakout === "up" ? "above the upper" : "below the lower"} Bollinger band (20-period, 2σ; ` +
+        `band ${fmtPrice(pf.lower)}–${fmtPrice(pf.upper)}) on ${pf.volumeRatio.toFixed(2)}x the 24h average volume`
+      : null;
+  // Full hourly OHLC candle array (oldest first) — the 48h Coinbase series.
+  const times = a.series?.times ?? [];
+  const candles = times
+    .map(
+      (t, i) =>
+        `${fmtTime(t)}  O ${fmtPrice(a.series.opens[i])}  H ${fmtPrice(a.series.highs[i])}  ` +
+        `L ${fmtPrice(a.series.lows[i])}  C ${fmtPrice(a.series.closes[i])}`,
+    )
+    .join("\n");
+  const userMsg =
+    newsBlock +
+    [
+      `## ${a.coin}`,
+      `current: ${fmtPrice(a.price)} (${fmtPct(a.changePct)} since last check${drift})`,
+      `triggered by: ${a.reasons.join("; ")}`,
+      ...(breakoutLine ? [breakoutLine] : []),
+      indicators,
+      `hourly OHLC candles, oldest first (~1h apart):`,
+      candles,
+    ].join("\n");
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -235,7 +275,23 @@ function headline(a) {
   return `${top.move >= 0 ? "\u{1F4C8}" : "\u{1F4C9}"} ${a.coin} ${fmtPrice(a.price)} (${fmtPct(top.move)} ${top.window})`;
 }
 
-function buildBody(alerts, analysis) {
+// Georgian, beginner-friendly note for a coin that triggered but did NOT clear
+// the breakout pre-filter — so it gets raw numbers with no AI paragraph.
+const STRUCTURAL_NOTE =
+  "ℹ️ სტრუქტურული შეტყობინება: ფასმა ზღვარი გადააჭარბა, მაგრამ ძლიერი „გარღვევა“ " +
+  "(ფასი Bollinger-ის ზოლის გარეთ + მკვეთრად გაზრდილი მოცულობა) არ დადასტურდა, " +
+  "ამიტომ დეტალური AI ანალიზი არ მომზადებულა — იხ. ციფრები ზემოთ.";
+
+// The per-coin analysis tail (plain text): the AI paragraph if the coin passed
+// the pre-filter and the call succeeded; the structural note if it didn't qualify;
+// otherwise (passed but the AI call failed/unset) the temporary-unavailable line.
+function bodyAnalysis(a) {
+  if (a.analysis) return `ანალიზი:\n${a.analysis}`;
+  if (a.prefilter && !a.prefilter.pass) return STRUCTURAL_NOTE;
+  return "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
+}
+
+function buildBody(alerts) {
   const sections = alerts.map((a) => {
     const hist = a.history
       .slice(-12)
@@ -250,12 +306,11 @@ function buildBody(alerts, analysis) {
       ...indicators,
       `ბოლო ფასები:`,
       hist,
+      ``,
+      bodyAnalysis(a),
     ].join("\n");
   });
-  const tail = analysis
-    ? `ანალიზი:\n${analysis}`
-    : "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
-  return `${sections.join("\n\n")}\n\n${tail}\n\n— Criptis`;
+  return `${sections.join("\n\n")}\n\n— Criptis`;
 }
 
 const esc = (s) =>
@@ -323,7 +378,7 @@ function readoutHtml(r) {
   if (r.pctB != null) chips.push(chip("%B", `${Math.round(r.pctB * 100)}%`));
   if (r.momentumPctPerStep != null) {
     const mBg = r.momentumPctPerStep >= 0 ? "#0ecb81" : "#f6465d";
-    // "/hr" label is accurate because the enrichment series is hourly (fetchSeries days:1).
+    // "/hr" label is accurate because the series is hourly Coinbase candles (granularity=3600).
     chips.push(chip("momentum", `${fmtPct(r.momentumPctPerStep)}/hr`, mBg, "#fff"));
   }
   if (r.volume) chips.push(chip("volume", r.volume.rising ? "rising" : "easing"));
@@ -334,10 +389,24 @@ function readoutHtml(r) {
         </div>`;
 }
 
+// Per-card analysis block (HTML): the AI paragraph (yellow-accented) if the coin
+// passed the pre-filter and the call succeeded; a muted structural note if it
+// didn't qualify; otherwise the temporary-unavailable line. Mirrors bodyAnalysis.
+function htmlAnalysis(a) {
+  if (a.analysis) {
+    return `<div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;margin-top:14px;color:#d6dae0;font-size:14px;line-height:1.6;">${mdLite(a.analysis)}</div>`;
+  }
+  const text =
+    a.prefilter && !a.prefilter.pass
+      ? STRUCTURAL_NOTE
+      : "ანალიზი დროებით მიუწვდომელია — იხ. ციფრები ზემოთ.";
+  return `<div style="border-left:3px solid #2b3139;border-radius:8px;padding:12px 16px;margin-top:14px;color:#848e9c;font-size:13px;line-height:1.6;">${esc(text)}</div>`;
+}
+
 // HTML twin of buildBody — a Binance-style dark card per coin with an embedded
-// chart. Always sent alongside the plain-text body, which remains the fallback
-// for clients that block HTML or images.
-function buildHtml(alerts, analysis) {
+// chart and the coin's own analysis (or structural note). Always sent alongside
+// the plain-text body, which remains the fallback for clients that block HTML.
+function buildHtml(alerts) {
   const cards = alerts.map((a) => {
     const pills = [pill(a.changePct, "1h")];
     if (a.driftPct !== null) pills.push(pill(a.driftPct, "24h"));
@@ -350,16 +419,13 @@ function buildHtml(alerts, analysis) {
         <div style="color:#b7bdc6;font-size:13px;line-height:1.5;margin-bottom:14px;">${esc(a.reasons.join("; "))}</div>
         ${readoutHtml(a.readout)}
         <img src="${chartUrl(a)}" alt="${esc(a.coin)} price chart" style="display:block;width:100%;max-width:600px;height:auto;border-radius:8px;" />
+        ${htmlAnalysis(a)}
       </div>`;
   });
-  const analysisHtml = analysis
-    ? `<div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;color:#d6dae0;font-size:14px;line-height:1.6;">${mdLite(analysis)}</div>`
-    : `<div style="color:#848e9c;font-size:13px;">ანალიზი დროებით მიუწვდომელია — იხ. ციფრები ზემოთ.</div>`;
   return `<!doctype html><html><body style="margin:0;padding:20px;background:#181a20;font-family:Arial,Helvetica,sans-serif;">
     <div style="max-width:600px;margin:0 auto;">
       <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">⚡ Criptis შეტყობინება</div>
       ${cards.join("")}
-      ${analysisHtml}
       <div style="color:#5e6673;font-size:11px;margin-top:16px;">Criptis · ავტომატური ფასის მეთვალყურე · ეს არ არის ფინანსური რჩევა</div>
     </div>
   </body></html>`;
@@ -413,7 +479,18 @@ async function sendEmail(subject, text, html) {
 
 async function main() {
   const state = loadState();
-  const prices = await fetchPrices(coins);
+  // Gather professional-grade market data (OHLCV + news) up front, then derive the
+  // spot price (latest close) per coin. A coin with no valid OHLCV is skipped here,
+  // never zeroed. A total failure (no coin priced) fails the run loudly, as the old
+  // CoinGecko fetch did, so a data outage never reads as "nothing happened".
+  const market = await gatherMarket(coins);
+  const { prices, skipped } = derivePrices(market.ohlcv, coins);
+  if (skipped.length) {
+    console.warn(`No valid price this run, skipping: ${skipped.join(", ")}`);
+  }
+  if (Object.keys(prices).length === 0) {
+    throw new Error(`no valid price for any coin this run (checked ${coins.length})`);
+  }
   const now = Date.now();
   const alerts = [];
 
@@ -421,7 +498,7 @@ async function main() {
     const price = prices[coin];
     // BUG-1: a coin with no valid price this run is skipped entirely — no signal
     // math and, crucially, no history append (a missing price must never be stored
-    // nor treated as a 0% move). fetchPrices already warned which coins were skipped.
+    // nor treated as a 0% move). derivePrices already collected which coins were skipped.
     if (price === undefined) {
       console.log(`${coin}: no valid price this run — skipped`);
       continue;
@@ -497,32 +574,31 @@ async function main() {
     fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
   }
 
-  // Enrichment layer: pull a dense hourly series for EVERY coin with a valid
-  // price this run and fold it into a descriptive technical readout. ONE fetch
-  // per coin — the email (alerting coins) and public/data.json (all coins) share
-  // the SAME readout, so no coin's series is fetched twice. This now runs BEFORE
-  // the no-trigger early return so the dashboard refreshes every run; it must
-  // never block an alert, so a failed fetch degrades that coin to a null readout
-  // (exactly as the email did before).
+  // Enrichment layer: fold each coin's already-gathered OHLCV into a descriptive
+  // technical readout. The series was fetched ONCE in gatherMarket and is reused
+  // here (no second fetch) — the triggers, the email (alerting coins) and
+  // public/data.json (all coins) all share the SAME candles and readout. A coin
+  // with no series degrades to a null readout, never blocking an alert.
   const enrichment = {};
   for (const coin of coins) {
     if (prices[coin] === undefined) continue; // no spot price this run — not published
+    const series = market.ohlcv[coin] ?? null;
     try {
-      const series = await fetchSeries(coin, { days: 1, demoKey: process.env.COINGECKO_API_KEY });
-      enrichment[coin] = { readout: readout(series), series };
-      console.log(`${coin}: readout — ${enrichment[coin].readout.summary}`);
+      enrichment[coin] = { readout: series ? readout(series) : null, series };
+      if (enrichment[coin].readout) console.log(`${coin}: readout — ${enrichment[coin].readout.summary}`);
     } catch (err) {
-      enrichment[coin] = { readout: null, series: null };
-      console.error(`Enrichment for ${coin} failed — null readout: ${err.message}`);
+      enrichment[coin] = { readout: null, series };
+      console.error(`Readout for ${coin} failed — null readout: ${err.message}`);
     }
   }
 
-  // Publish the dashboard feed every run (even with no alert): the spot price
-  // used for the triggers, the shared readout (or null), and the dense series as
-  // {t,p,v} (v null where CoinGecko gave no volume; [] when the fetch failed).
-  // Written here, before the early return below — Claude and Resend stay gated on
-  // a trigger. Unlike state.json (mutable history, skipped on dry runs) this is a
-  // stateless projection of the current run, so it is always (re)written.
+  // Publish the dashboard feed every run (even with no alert): the spot price used
+  // for the triggers, the shared readout (or null), and the hourly OHLCV series.
+  // Each point carries the full candle { t, o, h, l, c, v } plus p (= close) kept
+  // as a backward-compatible alias for the previous close-only feed (v null where
+  // the exchange gave no volume; [] when the fetch failed). Written here, before
+  // the early return below — Claude and Resend stay gated on a trigger. Unlike
+  // state.json this is a stateless projection of the run, so it is always rewritten.
   const data = { updatedAt: state.updatedAt, coins: {} };
   for (const coin of coins) {
     if (prices[coin] === undefined) continue;
@@ -531,7 +607,15 @@ async function main() {
       price: prices[coin],
       readout: r,
       series: series
-        ? series.times.map((t, i) => ({ t, p: series.closes[i], v: series.volumes[i] ?? null }))
+        ? series.times.map((t, i) => ({
+            t,
+            o: series.opens[i],
+            h: series.highs[i],
+            l: series.lows[i],
+            c: series.closes[i],
+            v: series.volumes[i] ?? null,
+            p: series.closes[i],
+          }))
         : [],
     };
   }
@@ -539,18 +623,42 @@ async function main() {
   fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2) + "\n");
   console.log(`Wrote ${path.relative(__dirname, DATA_PATH)} (${Object.keys(data.coins).length} coin(s))`);
 
-  // Reuse the shared readouts for the alert email + LLM — no second fetch.
-  for (const a of alerts) a.readout = enrichment[a.coin]?.readout ?? null;
+  // Reuse the shared readouts + candles for the alert email + LLM — no second fetch.
+  for (const a of alerts) {
+    a.readout = enrichment[a.coin]?.readout ?? null;
+    a.series = enrichment[a.coin]?.series ?? null;
+  }
 
   if (alerts.length === 0) {
     console.log("No triggers — state + data updated, nothing to send.");
     return;
   }
 
-  const analysis = await analyze(alerts);
+  // Breakout pre-filter — the LLM boundary. A deterministic trigger got the coin
+  // this far; the pre-filter decides whether the move is a real, volume-backed
+  // Bollinger breakout worth a written analysis. PASS -> analyze() with the full
+  // candle array + news. FAIL -> bypass the LLM and fall back to a structural
+  // (raw-metrics) alert. Each coin is judged independently, so one combined email
+  // can carry AI paragraphs for the breakouts and raw numbers for the rest.
+  for (const a of alerts) {
+    const pf = breakoutPrefilter(a.series);
+    a.prefilter = pf;
+    if (!pf.pass) {
+      a.analysis = null;
+      console.log(`${a.coin}: pre-filter SKIP (${pf.reason}) — structural alert, no LLM call`);
+      continue;
+    }
+    console.log(`${a.coin}: pre-filter PASS (${pf.reason}) — calling analyze()`);
+    a.analysis = await analyze(a, market.news);
+  }
+
   const subject = alerts.map(headline).join(" · ");
-  await sendEmail(subject, buildBody(alerts, analysis), buildHtml(alerts, analysis));
-  console.log(`Alert ${dryRun ? "printed" : "emailed"} for: ${alerts.map((a) => a.coin).join(", ")}`);
+  await sendEmail(subject, buildBody(alerts), buildHtml(alerts));
+  const llm = alerts.filter((a) => a.analysis).map((a) => a.coin);
+  console.log(
+    `Alert ${dryRun ? "printed" : "emailed"} for: ${alerts.map((a) => a.coin).join(", ")}` +
+      ` (LLM analysis: ${llm.length ? llm.join(", ") : "none"})`,
+  );
 }
 
 // Run only when invoked directly (node watcher.js) so a test file can import the

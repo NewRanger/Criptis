@@ -30,7 +30,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          # Prices come from Coinbase (no key). CryptoPanic news is optional —
+          # absent secret => the run continues with no news.
+          CRYPTOPANIC_API_KEY: ${{ secrets.CRYPTOPANIC_API_KEY }}
         run: node watcher.js
 
       - name: Commit updated state

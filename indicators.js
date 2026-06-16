@@ -163,3 +163,71 @@ export function readout(series, opts = {}) {
     summary: bits.join(", ") + ".",
   };
 }
+
+// ---------------------------------------------------------------------------
+// breakoutPrefilter(series, opts) — a mathematical gate placed right before the
+// (expensive) LLM step. A deterministic trigger (change / drift / streak) only
+// says the price MOVED; this asks whether the move looks like a genuine,
+// volume-backed breakout worth a written analysis, or just noise that tripped a
+// threshold. Pure and deterministic — same candles in, same verdict out.
+//
+//   series = { closes: number[], volumes?: number[] }  (the 48h Coinbase candles)
+//
+// PASSES only if BOTH hold on the latest hourly candle:
+//   1. volume spike  — the most recent hourly volume >= volMult (1.5x) the 24h
+//      (volPeriod) trailing moving-average volume, AND
+//   2. band breakout — the latest close is fully OUTSIDE the 20-period, 2σ
+//      Bollinger Band (above the upper band, or below the lower band).
+//
+// The 24h average is the trailing window INCLUDING the latest candle (the plain
+// reading of "24-hour moving-average volume"); a real spike still clears 1.5x.
+// Fails CLOSED when there isn't enough data to compute the bands or the volume
+// average — no breakout is ever claimed without the math behind it. Returns the
+// verdict plus the numbers and a `reason` string so the caller can log exactly
+// why a coin was sent to, or withheld from, the LLM.
+export function breakoutPrefilter(series, opts = {}) {
+  const { bbPeriod = 20, bbK = 2, volPeriod = 24, volMult = 1.5 } = opts;
+  const closes = (series && series.closes) || [];
+  const volumes = (series && series.volumes) || [];
+
+  const bb = bollinger(closes, bbPeriod, bbK);
+  const close = last(closes);
+  const recentVolume = last(volumes);
+  const recentVols = volumes.slice(-volPeriod).filter(Number.isFinite);
+  const avgVolume = recentVols.length ? mean(recentVols) : null;
+
+  const base = {
+    breakout: null,
+    volumeConfirmed: false,
+    close: close ?? null,
+    upper: bb ? bb.upper : null,
+    lower: bb ? bb.lower : null,
+    recentVolume: Number.isFinite(recentVolume) ? recentVolume : null,
+    avgVolume,
+    volumeRatio: null,
+  };
+
+  if (bb == null || close == null) {
+    return { ...base, pass: false, reason: `not enough price history for Bollinger (need ${bbPeriod} closes, have ${closes.length})` };
+  }
+  if (avgVolume == null || avgVolume <= 0 || !Number.isFinite(recentVolume)) {
+    return { ...base, pass: false, reason: "missing or insufficient volume data" };
+  }
+
+  const breakout = close > bb.upper ? "up" : close < bb.lower ? "down" : null;
+  const volumeRatio = recentVolume / avgVolume;
+  const volumeConfirmed = volumeRatio >= volMult;
+  const pass = breakout != null && volumeConfirmed;
+
+  let reason;
+  if (pass) {
+    reason = `breakout ${breakout} (close ${close} outside band [${bb.lower}, ${bb.upper}]) on ${volumeRatio.toFixed(2)}x the 24h avg volume`;
+  } else {
+    const why = [];
+    if (breakout == null) why.push("close inside Bollinger Band (no breakout)");
+    if (!volumeConfirmed) why.push(`volume ${volumeRatio.toFixed(2)}x < ${volMult}x avg`);
+    reason = why.join("; ");
+  }
+
+  return { ...base, pass, reason, breakout, volumeConfirmed, volumeRatio };
+}
