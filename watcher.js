@@ -374,6 +374,29 @@ export function evaluatePatternAlert(patterns, cooldowns, cfg, now) {
   return null;
 }
 
+// PURE diagnostics for --dry-run: a per-coin breakdown of why the top (highest-
+// confidence) pattern would or wouldn't raise an educational alert. The condition
+// flags describe the top pattern; `decision` is the authoritative call from
+// evaluatePatternAlert (reused here), so this can never diverge from real behaviour.
+// Read-only — printed in dry-run only, never affects alerts.
+export function explainPatternAlert(patterns, cooldowns, cfg, now) {
+  const list = [...(patterns ?? [])].sort((a, b) => (b?.confidence ?? 0) - (a?.confidence ?? 0));
+  const top = list[0] ?? null;
+  const minConfidence = Number.isFinite(cfg?.minConfidence) ? cfg.minConfidence : 0.75;
+  const cooldownMs = (Number.isFinite(cfg?.cooldownHours) ? cfg.cooldownHours : 12) * HOUR;
+  const last = top ? cooldowns?.[top.patternName] : undefined;
+  return {
+    count: list.length,
+    top: top?.patternName ?? null,
+    confidence: Number.isFinite(top?.confidence) ? top.confidence : null,
+    enabled: cfg?.enabled === true,
+    passedMinConfidence: !!top && Number.isFinite(top.confidence) && top.confidence >= minConfidence,
+    levelsValid: !!top && [top.supportLevel, top.resistanceLevel, top.invalidationLevel].every(Number.isFinite),
+    cooldownBlocked: !!top && Number.isFinite(last) && now - last < cooldownMs,
+    decision: evaluatePatternAlert(patterns, cooldowns, cfg, now) !== null,
+  };
+}
+
 // --- Notification (Resend) -----------------------------------------------------
 
 function headline(a) {
@@ -789,6 +812,24 @@ async function main() {
       console.log(`${coin}: patterns — ${patterns.map((p) => `${p.patternName} ${p.confidence}`).join(", ")}`);
     }
     enrichment[coin] = { readout: r, series, patterns };
+  }
+
+  // Dry-run observability: per-coin pattern-alert evaluation breakdown. Printed
+  // BEFORE the evaluation below records any cooldown, so cooldownBlocked reflects
+  // the pre-run state. Pure logging — changes no alert/email/threshold behaviour.
+  if (dryRun) {
+    console.log("\n--- DRY RUN: pattern-alert evaluation ---");
+    for (const coin of coins) {
+      if (prices[coin] === undefined) continue;
+      const d = explainPatternAlert(enrichment[coin]?.patterns ?? [], state.coins[coin]?.patternCooldowns, patternAlertsCfg, now);
+      const conf = d.confidence === null ? "—" : `${Math.round(d.confidence * 100)}%`;
+      console.log(
+        `${coin}: patterns=${d.count} top=${d.top ?? "—"} conf=${conf}` +
+          ` | enabled=${d.enabled} minConf=${d.passedMinConfidence} levels=${d.levelsValid} cooldownBlocked=${d.cooldownBlocked}` +
+          ` => pattern alert: ${d.decision ? "YES" : "no"}`,
+      );
+    }
+    console.log("--- END pattern-alert evaluation ---\n");
   }
 
   // Pattern-alert path (OPT-IN). For each priced coin, see whether its highest-

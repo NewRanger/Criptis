@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   derivePrices, driftDecision, summaryHtml, summaryToText, toPublicPatterns,
-  evaluatePatternAlert, buildBody, buildHtml,
+  evaluatePatternAlert, explainPatternAlert, buildBody, buildHtml,
 } from "./watcher.js";
 import { ascendingTriangle } from "./patterns/fixtures/synth.js";
 
@@ -188,6 +188,49 @@ test("evaluatePatternAlert returns the HIGHEST-confidence eligible pattern", () 
   const lo = { ...PATTERN, patternName: "Lo", confidence: 0.8 };
   const hi = { ...PATTERN, patternName: "Hi", confidence: 0.95 };
   assert.equal(evaluatePatternAlert([lo, hi], {}, ENABLED, 1000).patternName, "Hi");
+});
+
+// --- dry-run pattern-alert diagnostics ---------------------------------------
+
+test("explainPatternAlert: no patterns -> empty breakdown, decision no", () => {
+  const d = explainPatternAlert([], {}, ENABLED, 1000);
+  assert.equal(d.count, 0);
+  assert.equal(d.top, null);
+  assert.equal(d.confidence, null);
+  assert.equal(d.decision, false);
+});
+
+test("explainPatternAlert: an eligible pattern reports every flag true and decision YES", () => {
+  const d = explainPatternAlert([PATTERN], {}, ENABLED, 1000);
+  assert.equal(d.count, 1);
+  assert.equal(d.top, "Rising Wedge");
+  assert.equal(d.confidence, 0.9);
+  assert.equal(d.enabled, true);
+  assert.equal(d.passedMinConfidence, true);
+  assert.equal(d.levelsValid, true);
+  assert.equal(d.cooldownBlocked, false);
+  assert.equal(d.decision, true);
+});
+
+test("explainPatternAlert: when disabled, the per-condition flags still describe the top pattern but decision is no", () => {
+  const d = explainPatternAlert([PATTERN], {}, { ...ENABLED, enabled: false }, 1000);
+  assert.equal(d.enabled, false);
+  assert.equal(d.passedMinConfidence, true, "flags still reflect what WOULD pass");
+  assert.equal(d.levelsValid, true);
+  assert.equal(d.decision, false, "but a disabled config never alerts");
+});
+
+test("explainPatternAlert: a cooled-down pattern reports cooldownBlocked true and decision no", () => {
+  const now = 100 * HOUR;
+  const d = explainPatternAlert([PATTERN], { "Rising Wedge": now - 2 * HOUR }, ENABLED, now);
+  assert.equal(d.cooldownBlocked, true);
+  assert.equal(d.decision, false);
+});
+
+test("explainPatternAlert: a low-confidence pattern reports passedMinConfidence false", () => {
+  const d = explainPatternAlert([{ ...PATTERN, confidence: 0.4 }], {}, ENABLED, 1000);
+  assert.equal(d.passedMinConfidence, false);
+  assert.equal(d.decision, false);
 });
 
 // --- email rendering: combination + safety -----------------------------------
