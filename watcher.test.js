@@ -5,7 +5,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { derivePrices, driftDecision, summaryHtml, summaryToText } from "./watcher.js";
+import { derivePrices, driftDecision, summaryHtml, summaryToText, toPublicPatterns } from "./watcher.js";
+import { ascendingTriangle } from "./patterns/fixtures/synth.js";
 
 // --- BUG 1: derived-price validation (latest close, never zeroed) ------------
 
@@ -100,6 +101,43 @@ test("driftDecision: first run after deploy (prevDir defaulted to 0) on a mid-dr
 test("driftDecision: REARM = 1.0 means no hysteresis (re-arms the moment it drops below threshold)", () => {
   const d = driftDecision(3.9, THRESHOLD, 1, 1.0); // 3.9 < 4*1.0 -> re-arm immediately
   assert.deepEqual(d, { fire: false, nextDir: 0 });
+});
+
+// --- SHADOW MODE: pattern detection -> public/data.json only -----------------
+
+const PUBLIC_PATTERN_FIELDS = [
+  "patternName", "confidence", "supportLevel", "resistanceLevel",
+  "bullishBias", "bearishBias", "invalidationLevel",
+];
+
+test("toPublicPatterns maps a detected pattern to EXACTLY the 7 public fields (drops internal `details`)", () => {
+  const stub = () => [{
+    patternName: "Channel Up", confidence: 0.8, supportLevel: 127, resistanceLevel: 142,
+    bullishBias: 0.65, bearishBias: 0.24, invalidationLevel: 127,
+    details: { factors: {}, geometry: {}, resLine: {} }, // internal — must NOT leak
+  }];
+  const out = toPublicPatterns({ closes: [1] }, stub);
+  assert.equal(out.length, 1);
+  assert.deepEqual(Object.keys(out[0]).sort(), [...PUBLIC_PATTERN_FIELDS].sort());
+  assert.equal("details" in out[0], false, "internal diagnostics never reach the feed");
+});
+
+test("toPublicPatterns fails SAFE to [] when the detector throws — it can never break the run", () => {
+  const exploding = () => { throw new Error("detector bug"); };
+  assert.deepEqual(toPublicPatterns({ closes: [1, 2, 3] }, exploding), []);
+});
+
+test("toPublicPatterns returns [] for a missing series (no spot price / failed fetch)", () => {
+  assert.deepEqual(toPublicPatterns(null), []);
+  assert.deepEqual(toPublicPatterns(undefined), []);
+});
+
+test("toPublicPatterns end-to-end: a real Ascending Triangle series yields a clean public pattern", () => {
+  const out = toPublicPatterns(ascendingTriangle()); // uses the real detectPatterns
+  assert.ok(out.length >= 1, "the fixture forms a detectable pattern");
+  assert.equal(out[0].patternName, "Ascending Triangle");
+  for (const k of PUBLIC_PATTERN_FIELDS) assert.ok(k in out[0], `missing ${k}`);
+  assert.ok(out[0].confidence > 0 && out[0].confidence <= 1);
 });
 
 // --- georgianSummary rendering: the LLM's HTML string -> email (HTML + text) ---

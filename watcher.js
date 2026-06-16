@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { fetchSeries } from "./datasource.js";
 import { fetchNews } from "./news.js";
 import { readout, breakoutPrefilter } from "./indicators.js";
+import { detectPatterns } from "./patterns/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "config.json");
@@ -308,6 +309,33 @@ async function analyze(coinData, news = []) {
   } catch (err) {
     console.error(`Anthropic call failed — sending raw numbers only: ${err.message}`);
     return null;
+  }
+}
+
+// --- Pattern detection (SHADOW MODE) ------------------------------------------
+
+// Run the deterministic chart-pattern detector over a coin's OHLCV series and map
+// each hit to the public 7-field schema (dropping the internal `details`). This is
+// SHADOW MODE: the result is published to public/data.json for the dashboard ONLY.
+// It does NOT influence the alert triggers, the email, or the LLM prompt — pattern
+// detection never decides whether the user is notified. Always fails safe to []: a
+// missing series or any detector error yields [] and never throws, so this can
+// never break the run. `detect` is injectable for tests.
+export function toPublicPatterns(series, detect = detectPatterns) {
+  if (!series) return [];
+  try {
+    return detect(series).map((p) => ({
+      patternName: p.patternName,
+      confidence: p.confidence,
+      supportLevel: p.supportLevel,
+      resistanceLevel: p.resistanceLevel,
+      bullishBias: p.bullishBias,
+      bearishBias: p.bearishBias,
+      invalidationLevel: p.invalidationLevel,
+    }));
+  } catch (err) {
+    console.error(`Pattern detection failed — patterns []: ${err.message}`);
+    return [];
   }
 }
 
@@ -663,29 +691,40 @@ async function main() {
   for (const coin of coins) {
     if (prices[coin] === undefined) continue; // no spot price this run — not published
     const series = market.ohlcv[coin] ?? null;
+    let r = null;
     try {
-      enrichment[coin] = { readout: series ? readout(series) : null, series };
-      if (enrichment[coin].readout) console.log(`${coin}: readout — ${enrichment[coin].readout.summary}`);
+      r = series ? readout(series) : null;
+      if (r) console.log(`${coin}: readout — ${r.summary}`);
     } catch (err) {
-      enrichment[coin] = { readout: null, series };
       console.error(`Readout for ${coin} failed — null readout: ${err.message}`);
     }
+    // SHADOW MODE: deterministic chart-pattern detection, computed independently
+    // of the readout so neither can break the other. Published to public/data.json
+    // for the dashboard ONLY — it does not gate alerts, the email, or the LLM.
+    // toPublicPatterns fails safe to [] on a missing series or any detector error.
+    const patterns = toPublicPatterns(series);
+    if (patterns.length) {
+      console.log(`${coin}: patterns — ${patterns.map((p) => `${p.patternName} ${p.confidence}`).join(", ")}`);
+    }
+    enrichment[coin] = { readout: r, series, patterns };
   }
 
   // Publish the dashboard feed every run (even with no alert): the spot price used
-  // for the triggers, the shared readout (or null), and the hourly OHLCV series.
-  // Each point carries the full candle { t, o, h, l, c, v } plus p (= close) kept
-  // as a backward-compatible alias for the previous close-only feed (v null where
-  // the exchange gave no volume; [] when the fetch failed). Written here, before
-  // the early return below — Claude and Resend stay gated on a trigger. Unlike
-  // state.json this is a stateless projection of the run, so it is always rewritten.
+  // for the triggers, the shared readout (or null), the shadow-mode `patterns`
+  // array (dashboard-only; never gates alerts/email/LLM), and the hourly OHLCV
+  // series. Each point carries the full candle { t, o, h, l, c, v } plus p (= close)
+  // kept as a backward-compatible alias for the previous close-only feed (v null
+  // where the exchange gave no volume; [] when the fetch failed). Written here,
+  // before the early return below — Claude and Resend stay gated on a trigger.
+  // Unlike state.json this is a stateless projection of the run, always rewritten.
   const data = { updatedAt: state.updatedAt, coins: {} };
   for (const coin of coins) {
     if (prices[coin] === undefined) continue;
-    const { readout: r = null, series = null } = enrichment[coin] ?? {};
+    const { readout: r = null, series = null, patterns = [] } = enrichment[coin] ?? {};
     data.coins[coin] = {
       price: prices[coin],
       readout: r,
+      patterns,
       series: series
         ? series.times.map((t, i) => ({
             t,
