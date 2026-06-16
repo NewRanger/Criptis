@@ -2,19 +2,23 @@
 //
 // Family A of the pattern layer: patterns defined by the slopes of the upper
 // (resistance) and lower (support) envelopes plus whether they converge or run
-// parallel. PHASE 1 implements four of the eight Family-A patterns:
+// parallel. All eight Family-A patterns are classified from those three facts —
+// (sign of resistance slope, sign of support slope, converging vs parallel):
 //
-//   Ascending Triangle  — flat resistance, rising support, converging   (bullish)
-//   Descending Triangle — falling resistance, flat support, converging  (bearish)
-//   Channel Up          — both lines rising, parallel                   (bullish)
-//   Channel Down        — both lines falling, parallel                  (bearish)
+//   Ascending Triangle   — flat resistance, rising support, converging   (bullish)
+//   Descending Triangle  — falling resistance, flat support, converging  (bearish)
+//   Symmetrical Triangle — falling resistance, rising support, converging (neutral)
+//   Rising Wedge         — both rising, converging (support steeper)      (bearish)
+//   Falling Wedge        — both falling, converging (resistance steeper)  (bullish)
+//   Channel Up           — both rising, parallel                          (bullish)
+//   Channel Down         — both falling, parallel                         (bearish)
+//   Rectangle            — both flat, parallel                            (neutral)
 //
-// Symmetrical Triangle, Rising/Falling Wedge and Rectangle are deliberately NOT
-// classified yet (they return null) so the architecture can be validated first.
-//
-// The whole detector is pure and deterministic: same candles + opts -> identical
-// output. Fails CLOSED (returns []) whenever the data can't support a confident
-// geometric read, mirroring breakoutPrefilter() in indicators.js.
+// Any other geometry (broadening/megaphone, ambiguous, noisy) returns null — the
+// detector refuses to label what it can't classify. The whole detector is pure and
+// deterministic: same candles + opts -> identical output. Fails CLOSED (returns [])
+// whenever the data can't support a confident geometric read, mirroring
+// breakoutPrefilter() in indicators.js.
 
 import { atr } from "../atr.js";
 import { findPivots } from "../pivots.js";
@@ -40,18 +44,27 @@ export const DEFAULTS = {
 
 // Innate directional lean + geometry kind per pattern. `bull`/`bear` are the
 // archetype's lean magnitudes BEFORE scaling by confidence; `flatSide` marks which
-// trendline is the flat one (used by the symmetry score for triangles).
-// `invalidateBelow` marks the break direction that kills the pattern: bullish
-// patterns die on a break BELOW support, bearish ones on a break ABOVE resistance.
+// trendline (if any) is the flat one — used by the symmetry score for triangles.
+// `bias` drives the active-pattern gate:
+//   "bull"    — dies on a break BELOW support     (invalidation = support)
+//   "bear"    — dies on a break ABOVE resistance  (invalidation = resistance)
+//   "neutral" — active only WHILE CONTAINED; a break of EITHER line resolves it
 const INNATE = {
-  "Ascending Triangle":  { bull: 1.0, bear: 0.2, kind: "converging", flatSide: "res", invalidateBelow: true },
-  "Descending Triangle": { bull: 0.2, bear: 1.0, kind: "converging", flatSide: "sup", invalidateBelow: false },
-  "Channel Up":          { bull: 0.8, bear: 0.3, kind: "parallel", invalidateBelow: true },
-  "Channel Down":        { bull: 0.3, bear: 0.8, kind: "parallel", invalidateBelow: false },
+  "Ascending Triangle":   { bull: 1.0, bear: 0.2, kind: "converging", flatSide: "res",  bias: "bull" },
+  "Descending Triangle":  { bull: 0.2, bear: 1.0, kind: "converging", flatSide: "sup",  bias: "bear" },
+  "Symmetrical Triangle": { bull: 0.5, bear: 0.5, kind: "converging", flatSide: null,   bias: "neutral" },
+  "Rising Wedge":         { bull: 0.2, bear: 0.9, kind: "converging", flatSide: null,   bias: "bear" },
+  "Falling Wedge":        { bull: 0.9, bear: 0.2, kind: "converging", flatSide: null,   bias: "bull" },
+  "Channel Up":           { bull: 0.8, bear: 0.3, kind: "parallel",   flatSide: null,   bias: "bull" },
+  "Channel Down":         { bull: 0.3, bear: 0.8, kind: "parallel",   flatSide: null,   bias: "bear" },
+  "Rectangle":            { bull: 0.5, bear: 0.5, kind: "parallel",   flatSide: null,   bias: "neutral" },
 };
 
-// Pure classification from the two slopes + convergence. Returns a pattern name or
-// null for any geometry not covered by Phase 1.
+// Pure classification from the two slopes + convergence. Returns a pattern name, or
+// null for any geometry not in the catalogue (broadening, ambiguous convergence).
+// The eight conditions are mutually exclusive: flat/rising/falling partition the
+// slope sign, and converging/parallel are disjoint bands (a convergenceRatio
+// between them, or a diverging one, falls through to null).
 export function classify(resSlopePct, supSlopePct, convergenceRatio, t = DEFAULTS) {
   const flat = (s) => Math.abs(s) < t.flatSlopePct;
   const rising = (s) => s >= t.flatSlopePct;
@@ -61,9 +74,38 @@ export function classify(resSlopePct, supSlopePct, convergenceRatio, t = DEFAULT
 
   if (converging && flat(resSlopePct) && rising(supSlopePct)) return "Ascending Triangle";
   if (converging && falling(resSlopePct) && flat(supSlopePct)) return "Descending Triangle";
+  if (converging && falling(resSlopePct) && rising(supSlopePct)) return "Symmetrical Triangle";
+  if (converging && rising(resSlopePct) && rising(supSlopePct)) return "Rising Wedge";
+  if (converging && falling(resSlopePct) && falling(supSlopePct)) return "Falling Wedge";
   if (parallel && rising(resSlopePct) && rising(supSlopePct)) return "Channel Up";
   if (parallel && falling(resSlopePct) && falling(supSlopePct)) return "Channel Down";
-  return null; // Symmetrical Triangle / Wedges / Rectangle — not in Phase 1
+  if (parallel && flat(resSlopePct) && flat(supSlopePct)) return "Rectangle";
+  return null; // broadening / ambiguous convergence / not a catalogued pattern
+}
+
+// Geometric symmetry sub-score in [0,1], per pattern archetype. All inputs are the
+// scale-free slopes + convergence already measured by lineGeometry.
+function symmetryScore(name, innate, geo, t) {
+  const res = geo.resSlopePctPerStep, sup = geo.supSlopePctPerStep;
+  const conv = conf.clamp01(geo.convergenceRatio);
+  const flatness = (s) => conf.clamp01(1 - Math.abs(s) / t.flatSlopePct);
+
+  if (innate.kind === "parallel") {
+    const parallelism = conf.clamp01(1 - Math.abs(geo.convergenceRatio) / t.parallelRatio);
+    if (name === "Rectangle") return 0.5 * parallelism + 0.5 * (0.5 * flatness(res) + 0.5 * flatness(sup));
+    const meanSlope = (Math.abs(res) + Math.abs(sup)) / 2 || 1;
+    const slopeEq = conf.clamp01(1 - Math.abs(res - sup) / meanSlope); // channels: equal slopes
+    return 0.5 * parallelism + 0.5 * slopeEq;
+  }
+  // converging family
+  if (innate.flatSide) return 0.5 * flatness(innate.flatSide === "res" ? res : sup) + 0.5 * conv;
+  if (name === "Symmetrical Triangle") {
+    const mag = (Math.abs(res) + Math.abs(sup)) / 2 || 1; // reward equal & opposite slopes
+    return 0.5 * conf.clamp01(1 - Math.abs(Math.abs(res) - Math.abs(sup)) / mag) + 0.5 * conv;
+  }
+  // wedges: both slopes the same sign, converging — clean convergence is the signal
+  const sameSign = Math.sign(res) === Math.sign(sup) ? 1 : 0;
+  return 0.5 * conv + 0.5 * sameSign;
 }
 
 const round3 = (x) => (Number.isFinite(x) ? Math.round(x * 1000) / 1000 : x);
@@ -114,14 +156,26 @@ export function detectTrendlinePatterns(series, opts = {}) {
   // A pattern is only reported while price is still CONTAINED by it. Because the
   // pivots exclude the most recent `pivotWidth` bars (confirmation lag), the fitted
   // lines are extrapolated to the current bar; if the latest close has already
-  // broken through the invalidation line by more than an ATR-relative tolerance,
-  // the structure is dead, not active. Drop it rather than report e.g. a bullish
-  // Channel Up that price has already fallen out of the bottom of.
-  const invalidationLevel = innate.invalidateBelow ? supportLevel : resistanceLevel;
-  const invalidationTol = t.invalidationAtr * a;
-  const invalidated = innate.invalidateBelow
-    ? close < invalidationLevel - invalidationTol
-    : close > invalidationLevel + invalidationTol;
+  // broken through past an ATR-relative tolerance, the structure is resolved, not
+  // active. Directional patterns die only on a break in their INVALIDATION
+  // direction (a favourable breakout is the thesis confirming, not invalidation).
+  // Neutral patterns (Symmetrical Triangle, Rectangle) have no thesis — a break of
+  // EITHER line resolves them, so they're reported only while price sits inside.
+  const tol = t.invalidationAtr * a;
+  let invalidationLevel, invalidated;
+  if (innate.bias === "bull") {
+    invalidationLevel = supportLevel;
+    invalidated = close < supportLevel - tol;
+  } else if (innate.bias === "bear") {
+    invalidationLevel = resistanceLevel;
+    invalidated = close > resistanceLevel + tol;
+  } else {
+    // neutral: void once price leaves the envelope either side; surface the nearer
+    // edge (the level whose break would most imminently end the consolidation).
+    invalidated = close < supportLevel - tol || close > resistanceLevel + tol;
+    invalidationLevel =
+      Math.abs(close - supportLevel) <= Math.abs(close - resistanceLevel) ? supportLevel : resistanceLevel;
+  }
   if (invalidated) return [];
 
   // --- Confidence sub-scores ---
@@ -130,22 +184,14 @@ export function detectTrendlinePatterns(series, opts = {}) {
   const sFit = conf.scoreFit(Math.max(resLine.rmsResidual, supLine.rmsResidual), a);
 
   const vt = volumeTrend(series.volumes);
-  let sBreakout, sVolume, sSym;
+  const sSym = symmetryScore(name, innate, geo, t);
+  let sBreakout, sVolume;
   if (innate.kind === "converging") {
     sBreakout = conf.scoreBreakoutConverging(geo.apexBar, xN, { horizon: t.apexHorizon });
-    sVolume = conf.scoreVolume(vt?.ratio, "contraction");
-    const flatSlope = innate.flatSide === "res" ? geo.resSlopePctPerStep : geo.supSlopePctPerStep;
-    const flatness = conf.clamp01(1 - Math.abs(flatSlope) / t.flatSlopePct);
-    sSym = 0.5 * flatness + 0.5 * conf.clamp01(geo.convergenceRatio);
+    sVolume = conf.scoreVolume(vt?.ratio, "contraction"); // triangles/wedges: volume should dry up
   } else {
-    sBreakout = conf.scoreBreakoutParallel(close, resistanceLevel, supportLevel, a, {
-      boundaryAtr: t.boundaryAtr,
-    });
-    sVolume = conf.scoreVolume(vt?.ratio, "steady");
-    const parallelism = conf.clamp01(1 - Math.abs(geo.convergenceRatio) / t.parallelRatio);
-    const meanSlope = (Math.abs(geo.resSlopePctPerStep) + Math.abs(geo.supSlopePctPerStep)) / 2 || 1;
-    const slopeEq = conf.clamp01(1 - Math.abs(geo.resSlopePctPerStep - geo.supSlopePctPerStep) / meanSlope);
-    sSym = 0.5 * parallelism + 0.5 * slopeEq;
+    sBreakout = conf.scoreBreakoutParallel(close, resistanceLevel, supportLevel, a, { boundaryAtr: t.boundaryAtr });
+    sVolume = conf.scoreVolume(vt?.ratio, "steady"); // channels/rectangle: steady volume
   }
 
   const factors = { fit: sFit, touch: sTouch, symmetry: sSym, volume: sVolume, breakout: sBreakout };

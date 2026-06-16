@@ -8,8 +8,9 @@ import { fileURLToPath } from "node:url";
 
 import { detectPatterns } from "./index.js";
 import {
-  ascendingTriangle, descendingTriangle, channelUp, channelDown, flatRange,
-  invalidatedChannelUp, invalidatedChannelDown, setLastClose,
+  ascendingTriangle, descendingTriangle, symmetricalTriangle, rectangle,
+  risingWedge, fallingWedge, channelUp, channelDown,
+  invalidatedChannelUp, invalidatedChannelDown, setLastClose, broadening, noise,
 } from "./fixtures/synth.js";
 
 const REQUIRED = [
@@ -58,8 +59,48 @@ test("every match carries the full required schema with finite numbers", () => {
   assert.ok(m.bearishBias >= 0 && m.bearishBias <= 1);
 });
 
-test("refuses to classify a Rectangle — Phase 1 returns nothing rather than guessing", () => {
-  assert.deepEqual(detectPatterns(flatRange()), []);
+// --- The four detectors completing Family A ---------------------------------
+
+test("Symmetrical Triangle: detected, neutral bias, invalidation at the nearer edge", () => {
+  const m = top(symmetricalTriangle());
+  assert.equal(m.patternName, "Symmetrical Triangle");
+  assert.ok(Math.abs(m.bullishBias - m.bearishBias) < 1e-9, "no directional lean until it breaks");
+  assert.ok(m.supportLevel < m.resistanceLevel);
+  assert.ok(m.invalidationLevel === m.supportLevel || m.invalidationLevel === m.resistanceLevel);
+});
+
+test("Rectangle: detected (no longer refused), neutral bias", () => {
+  const m = top(rectangle());
+  assert.equal(m.patternName, "Rectangle");
+  assert.ok(Math.abs(m.bullishBias - m.bearishBias) < 1e-9);
+  assert.ok(m.supportLevel < m.resistanceLevel);
+});
+
+test("Rising Wedge: detected, bearish, invalidation at resistance", () => {
+  const m = top(risingWedge());
+  assert.equal(m.patternName, "Rising Wedge");
+  assert.ok(m.bearishBias > m.bullishBias, "a rising wedge leans bearish");
+  assert.equal(m.invalidationLevel, m.resistanceLevel);
+});
+
+test("Falling Wedge: detected, bullish, invalidation at support", () => {
+  const m = top(fallingWedge());
+  assert.equal(m.patternName, "Falling Wedge");
+  assert.ok(m.bullishBias > m.bearishBias, "a falling wedge leans bullish");
+  assert.equal(m.invalidationLevel, m.supportLevel);
+});
+
+// --- Negative controls: geometry the detector must REFUSE -------------------
+
+test("refuses a broadening / megaphone (diverging band is not in the catalogue)", () => {
+  assert.deepEqual(detectPatterns(broadening()), []);
+});
+
+test("refuses noisy / random geometry (no clean trendline fit)", () => {
+  // a few independent seeds — none should hallucinate a pattern out of noise
+  for (const seed of [1, 12345, 67890, 555]) {
+    assert.deepEqual(detectPatterns(noise(seed)), [], `seed ${seed} produced a phantom pattern`);
+  }
 });
 
 // --- Active-pattern gate: a pattern price has already broken out of (in the
@@ -88,6 +129,32 @@ test("a favourable breakout is NOT treated as invalidation (Channel Up that brok
   const aboveResistance = base.resistanceLevel + 1.0 * base.details.atr; // broke up, not down
   const m = detectPatterns(setLastClose(channelUp(), aboveResistance))[0];
   assert.ok(m && m.patternName === "Channel Up", "an upside break is the bullish resolution, not invalidation");
+});
+
+test("active-pattern gate: a Rising Wedge that broke UP through resistance is invalidated", () => {
+  const base = top(risingWedge()); // bearish -> dies on an upside break
+  const above = base.resistanceLevel + 2.0 * base.details.atr;
+  assert.deepEqual(detectPatterns(setLastClose(risingWedge(), above)), []);
+});
+
+test("active-pattern gate: a Falling Wedge that broke DOWN through support is invalidated", () => {
+  const base = top(fallingWedge()); // bullish -> dies on a downside break
+  const below = base.supportLevel - 2.0 * base.details.atr;
+  assert.deepEqual(detectPatterns(setLastClose(fallingWedge(), below)), []);
+});
+
+test("active-pattern gate: a neutral Symmetrical Triangle resolves on EITHER break", () => {
+  const base = top(symmetricalTriangle());
+  const a = base.details.atr;
+  assert.deepEqual(detectPatterns(setLastClose(symmetricalTriangle(), base.resistanceLevel + 2 * a)), [], "upside break resolves it");
+  assert.deepEqual(detectPatterns(setLastClose(symmetricalTriangle(), base.supportLevel - 2 * a)), [], "downside break resolves it");
+});
+
+test("active-pattern gate: a neutral Rectangle broken out either side is not reported", () => {
+  const base = top(rectangle());
+  const a = base.details.atr;
+  assert.deepEqual(detectPatterns(setLastClose(rectangle(), base.resistanceLevel + 2 * a)), []);
+  assert.deepEqual(detectPatterns(setLastClose(rectangle(), base.supportLevel - 2 * a)), []);
 });
 
 test("fails closed on too little data", () => {

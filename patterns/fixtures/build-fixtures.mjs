@@ -8,19 +8,25 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  ascendingTriangle, descendingTriangle, channelUp, channelDown, flatRange,
-  invalidatedChannelUp, invalidatedChannelDown,
+  ascendingTriangle, descendingTriangle, symmetricalTriangle, rectangle,
+  risingWedge, fallingWedge, channelUp, channelDown,
+  invalidatedChannelUp, invalidatedChannelDown, broadening, noise,
 } from "./synth.js";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const out = {
   "ascending-triangle": ascendingTriangle(),
   "descending-triangle": descendingTriangle(),
+  "symmetrical-triangle": symmetricalTriangle(),
+  "rectangle": rectangle(),
+  "rising-wedge": risingWedge(),
+  "falling-wedge": fallingWedge(),
   "channel-up": channelUp(),
   "channel-down": channelDown(),
-  "flat-range": flatRange(),
   "invalidated-channel-up": invalidatedChannelUp(),
   "invalidated-channel-down": invalidatedChannelDown(),
+  "broadening": broadening(),
+  "noise": noise(),
 };
 
 for (const [name, series] of Object.entries(out)) {

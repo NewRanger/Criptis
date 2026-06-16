@@ -95,14 +95,71 @@ export const channelDown = () =>
     highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: steady,
   });
 
-// Both envelopes flat and parallel: a Rectangle. Phase 1 does NOT classify this,
-// so it is the negative control — detectPatterns() must return [].
-export const flatRange = () =>
+// Falling resistance + rising support, converging with balanced slopes:
+// Symmetrical Triangle (neutral — resolves on whichever side breaks first).
+export const symmetricalTriangle = () =>
+  zigzag({
+    upper: { slope: -0.35, intercept: 140 },
+    lower: { slope: 0.35, intercept: 104 },
+    highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: contracting,
+  });
+
+// Both envelopes flat and parallel: a Rectangle (neutral range).
+export const rectangle = () =>
   zigzag({
     upper: { slope: 0, intercept: 130 },
     lower: { slope: 0, intercept: 120 },
     highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: steady,
   });
+
+// Both lines rising but the lower line rising FASTER, so the band converges upward:
+// Rising Wedge (bearish).
+export const risingWedge = () =>
+  zigzag({
+    upper: { slope: 0.3, intercept: 122 },
+    lower: { slope: 0.6, intercept: 104 },
+    highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: contracting,
+  });
+
+// Both lines falling but the upper line falling FASTER, so the band converges down:
+// Falling Wedge (bullish) — mirror of the Rising Wedge.
+export const fallingWedge = () =>
+  zigzag({
+    upper: { slope: -0.6, intercept: 136 },
+    lower: { slope: -0.3, intercept: 118 },
+    highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: contracting,
+  });
+
+// --- Negative controls: geometry the detector must REFUSE ---
+
+// Rising resistance + falling support => the band WIDENS (a broadening / megaphone).
+// Not in the catalogue: convergenceRatio is negative, so classify() returns null.
+export const broadening = () =>
+  zigzag({
+    upper: { slope: 0.4, intercept: 116 },
+    lower: { slope: -0.4, intercept: 104 },
+    highIdx: HIGH_IDX, lowIdx: LOW_IDX, volFn: steady,
+  });
+
+// Deterministic pseudo-random walk (seeded LCG — no Math.random, fully repeatable).
+// Pivots scatter, so no clean trendline fits / the geometry is ambiguous => [].
+export function noise(seed = 12345, n = 48) {
+  let s = seed >>> 0;
+  const rand = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const series = { times: [], opens: [], highs: [], lows: [], closes: [], volumes: [] };
+  let price = 100;
+  for (let i = 0; i < n; i++) {
+    price += (rand() - 0.5) * 6; // step in (-3, 3)
+    const wick = 0.3 + rand() * 0.6;
+    series.times.push(T0 + i * HOUR);
+    series.opens.push(price);
+    series.closes.push(price);
+    series.highs.push(price + wick);
+    series.lows.push(price - wick);
+    series.volumes.push(900 + Math.round(rand() * 200));
+  }
+  return series;
+}
 
 // Overwrite the latest candle of a series with a flat doji at `price`. The last
 // bar is inside the pivot confirmation lag, so this changes the current close

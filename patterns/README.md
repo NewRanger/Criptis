@@ -7,9 +7,10 @@ reproducible, unit-testable, and — the whole point — **backtestable**. The L
 role inverts elsewhere in Criptis: it stops detecting and starts *explaining* a
 pattern that arrives as structured data.
 
-> **Phase 1 (this commit) — foundation only.** Primitives + four trendline
-> patterns, so the architecture can be validated before the remaining ten are
-> built. See [Scope](#phase-1-scope) below.
+> **Status — Family A complete.** Primitives + all eight trendline-geometry
+> patterns, each with an active-pattern containment gate. The swing-structure
+> family (double/triple tops & bottoms, head & shoulders) is still to come. See
+> [Scope](#scope) below.
 
 ## Design principle
 
@@ -63,20 +64,44 @@ complements — so a neutral pre-breakout shape can honestly report a weak lean 
 both sides rather than being forced to pick a direction. `details` is diagnostic
 (not part of the contract) and feeds the backtest and the dashboard.
 
-## The four Phase-1 patterns
+## Family A — the eight trendline patterns
 
 Fit one line through the pivot **highs** (resistance) and one through the pivot
 **lows** (support), then classify by slope signs + convergence:
 
-| resistance | support | band | → Pattern | innate bias | invalidation |
+| resistance | support | band | → Pattern | bias | invalidation |
 |---|---|---|---|---|---|
 | flat | rising | converging | **Ascending Triangle** | bullish | support |
 | falling | flat | converging | **Descending Triangle** | bearish | resistance |
+| falling | rising | converging | **Symmetrical Triangle** | neutral | nearer edge¹ |
+| rising | rising | converging | **Rising Wedge** | bearish | resistance |
+| falling | falling | converging | **Falling Wedge** | bullish | support |
 | rising | rising | parallel | **Channel Up** | bullish | support |
 | falling | falling | parallel | **Channel Down** | bearish | resistance |
+| flat | flat | parallel | **Rectangle** | neutral | nearer edge¹ |
 
-Any other geometry returns `null` — the detector refuses to label what it can't
-classify (this is what keeps the false-positive rate down).
+Any other geometry (broadening/megaphone, ambiguous convergence, noise) returns
+`null` — the detector refuses to label what it can't classify, which is what keeps
+the false-positive rate down.
+
+¹ Neutral patterns have no directional thesis, so the active-pattern gate keeps
+them only while price is **contained between both lines**; a break of *either* side
+resolves them. `invalidationLevel` surfaces the nearer edge (the line whose break
+would most imminently end the consolidation).
+
+## Active-pattern (containment) gate
+
+Pivots exclude the most recent `pivotWidth` bars (confirmation lag), so the fitted
+lines are **extrapolated** to the current bar. A pattern is reported only while
+price is still contained:
+
+- **Directional** patterns die only on a break in their *invalidation* direction
+  (a favourable breakout is the thesis confirming, not invalidating).
+- **Neutral** patterns die on a break of *either* line.
+
+"Broken" means the close is past the line by more than `invalidationAtr` (0.5) ×
+ATR. This prevents reporting e.g. a bullish Channel Up that price has already
+fallen out of the bottom of.
 
 ## Confidence model (5 factors)
 
@@ -138,19 +163,20 @@ import { detectPatterns } from "./patterns/index.js";
 const matches = detectPatterns(series); // ranked, highest confidence first
 ```
 
-## Phase 1 scope
+## Scope
 
-**Implemented:** `atr`, `findPivots`, `fitLine`, `lineGeometry`, and the four
-trendline patterns above, with unit tests, fixtures, and this doc.
+**Implemented:** `atr`, `findPivots`, `fitLine`, `lineGeometry`, all **eight**
+Family-A trendline patterns above (each with the active-pattern gate), unit +
+property + negative-control tests, fixtures, and this doc. Wired into
+[`../watcher.js`](../watcher.js) in **shadow mode** — published to
+`public/data.json` for the dashboard only; it does not gate alerts, the email, or
+the LLM prompt.
 
-**Deliberately not yet built** (return `null`/absent until their phase):
+**Deliberately not yet built:**
 
-- Trendline family: Symmetrical Triangle, Rising Wedge, Falling Wedge, Rectangle.
 - Swing-structure family: Double/Triple Top & Bottom, Head & Shoulders, Inverse H&S.
-- **Integration** into [`../watcher.js`](../watcher.js) and `public/data.json`, and
-  the prompt change that turns `patternName`/`invalidationLevel` from LLM *outputs*
-  into LLM *inputs*. The detector is standalone and side-effect-free for now, so it
-  can be validated in isolation.
+- The prompt change that turns `patternName`/`invalidationLevel` from LLM *outputs*
+  into LLM *inputs*.
 - The **backtest harness** (`backtest/`) that calibrates `confidence` against
   forward outcomes.
 
