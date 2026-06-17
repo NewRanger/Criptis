@@ -457,26 +457,26 @@ function bodyAnalysis(a) {
 // Pattern-observed reason line for a coin whose ONLY trigger is a chart pattern.
 const PATTERN_REASON = "📊 გრაფიკული ფიგურა შენიშნულია (chart pattern observed)";
 
-// Beginner-friendly Georgian copy per pattern: a Georgian name and a one-sentence
-// "what this trend means". `dir` (bull/bear/neutral) selects the zone + invalidation
-// guidance below, so each pattern reads in plain language, not dry labels.
+// Georgian copy per pattern: a Georgian name and a one-sentence "what this figure
+// means", in standard trading terms (მხარდაჭერა / წინააღმდეგობა) but plainly worded.
+// `dir` (bull/bear/neutral) selects the zone + invalidation guidance below.
 const PATTERN_COPY = {
   "Ascending Triangle":   { ka: "აღმავალი სამკუთხედი", dir: "bull",
-    trend: "ფასი ქვედა ხაზიდან თანდათან მაღლა იწევს, ზედა ზღვარს კი ერთსა და იმავე დონეზე აწყდება — ხშირად ზრდისთვის მზადების ნიშანია." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასის ქვედა ნიშნულები თანდათან იზრდება, ხოლო ზედა წინააღმდეგობის ხაზი ჰორიზონტალურია. ძირითადად მიანიშნებს ფასის სამომავლო ზრდაზე." },
   "Descending Triangle":  { ka: "დაღმავალი სამკუთხედი", dir: "bear",
-    trend: "ფასი ზედა ხაზიდან თანდათან ქვემოთ ეშვება, ქვედა ზღვარს კი ერთსა და იმავე დონეზე ეყრდნობა — ხშირად კლებისთვის მზადების ნიშანია." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასის ზედა ნიშნულები თანდათან მცირდება, ხოლო ქვედა მხარდაჭერის ხაზი ჰორიზონტალურია. ძირითადად მიანიშნებს ფასის სამომავლო ვარდნაზე." },
   "Symmetrical Triangle": { ka: "სიმეტრიული სამკუთხედი", dir: "neutral",
-    trend: "ფასის რყევები თანდათან მცირდება და ორ ხაზს შორის იკუმშება — მიმართულება ჯერ გაურკვეველია და გარღვევას ელოდება." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასის რყევები თანდათან მცირდება და ორი ხაზი ერთმანეთს უახლოვდება. მიმართულება ჯერ გაურკვეველია და გარღვევას ელოდება." },
   "Rising Wedge":         { ka: "აღმავალი სოლი", dir: "bear",
-    trend: "ფასი მაღლა იწევს, მაგრამ რყევები ვიწროვდება და იმპულსი სუსტდება — ხშირად აღმასვლის დაღლის ნიშანია." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასი იზრდება, თუმცა რყევები ვიწროვდება და აღმავალი იმპულსი სუსტდება. ხშირად მიანიშნებს ზრდის ამოწურვასა და სამომავლო ვარდნაზე." },
   "Falling Wedge":        { ka: "დაღმავალი სოლი", dir: "bull",
-    trend: "ფასი ქვემოთ ეშვება, მაგრამ ვარდნა თანდათან სუსტდება და ვიწროვდება — ხშირად კლების ამოწურვის ნიშანია." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასი ეცემა, თუმცა ვარდნა თანდათან სუსტდება და რყევები ვიწროვდება. ხშირად მიანიშნებს კლების ამოწურვასა და სამომავლო ზრდაზე." },
   "Channel Up":           { ka: "აღმავალი არხი", dir: "bull",
-    trend: "ფასი ორ პარალელურ ხაზს შორის, საფეხურებად მაღლა მიიწევს — მიმდინარე მიმართულება ზრდისკენაა." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასი ორ პარალელურ ხაზს შორის საფეხურებრივად მაღლა მოძრაობს. მიმდინარე ტენდენცია აღმავალია." },
   "Channel Down":         { ka: "დაღმავალი არხი", dir: "bear",
-    trend: "ფასი ორ პარალელურ ხაზს შორის, საფეხურებად ქვემოთ ეშვება — მიმდინარე მიმართულება კლებისკენაა." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასი ორ პარალელურ ხაზს შორის საფეხურებრივად ქვემოთ მოძრაობს. მიმდინარე ტენდენცია დაღმავალია." },
   "Rectangle":            { ka: "მართკუთხედი", dir: "neutral",
-    trend: "ფასი გარკვეულ დიაპაზონში, ორ ჰორიზონტალურ ხაზს შორის მოძრაობს — ბაზარი ისვენებს და მკაფიო მიმართულება არ აქვს." },
+    trend: "ტექნიკური ფიგურა, სადაც ფასი ორ ჰორიზონტალურ ხაზს შორის, გარკვეულ დიაპაზონში მოძრაობს. ბაზარი მოლოდინის რეჟიმშია და მკაფიო მიმართულება არ იკვეთება." },
 };
 const PATTERN_FALLBACK = { ka: "გრაფიკული ფიგურა", dir: "neutral", trend: "ფასი მნიშვნელოვან გრაფიკულ ფიგურას ქმნის." };
 
@@ -484,27 +484,27 @@ const PATTERN_FALLBACK = { ka: "გრაფიკული ფიგურა",
 // guidance is correct for bullish, bearish and range patterns alike.
 const ZONE_COPY = {
   bull: {
-    lower: "თუ ფასი აქ შეჩერდა და ისევ აიწია, აღმავალი ტრენდი ძალაში რჩება; ქვემოთ მკაფიო გარღვევა კი სისუსტის ნიშანია.",
-    upper: "აქ ფასს ხშირად უჭირს გაგრძელება; ძლიერი გარღვევა ზრდის გაგრძელებას მიანიშნებს.",
-    invalidation: "თუ ფასი ამ დონის ქვემოთ დაიხურა, ფიგურა ძალას კარგავს.",
+    lower: "ამ დონესთან ფასი ხშირად ბრუნდება; ქვემოთ მკაფიო გარღვევა ტენდენციის შესუსტებას მიანიშნებს.",
+    upper: "ამ დონესთან ფასს გავლა უჭირს; დამაჯერებელი გარღვევა ზრდის გაგრძელებაზე მიუთითებს.",
+    invalidation: "თუ ფასი ამ ნიშნულის ქვემოთ დაიხურება, ფიგურა ძალას კარგავს.",
   },
   bear: {
-    lower: "ეს დონე ფასს ქვემოდან იჭერს; მკაფიო გარღვევა კლების გაღრმავებას მიანიშნებს.",
-    upper: "აქ ფასს აწევა გაუჭირდება; ზემოთ დამაგრება კი კლების სცენარს ასუსტებს.",
-    invalidation: "თუ ფასი ამ დონის ზემოთ დაიხურა, ფიგურა ძალას კარგავს.",
+    lower: "ამ დონის ქვემოთ მკაფიო გარღვევა კლების გაგრძელებაზე მიუთითებს.",
+    upper: "ამ ზონაში ფასის ზრდა ფერხდება.",
+    invalidation: "თუ ფასი ამ ნიშნულის ზემოთ დაფიქსირდება (დაიხურება), ფიგურა ძალას კარგავს.",
   },
   neutral: {
-    lower: "თუ ფასი აქ შეჩერდა, დიაპაზონი გრძელდება; ქვემოთ გარღვევა კლებისკენ მცდელობას აჩვენებს.",
-    upper: "თუ ფასი აქ შეფერხდა, დიაპაზონი გრძელდება; ზემოთ გარღვევა ზრდისკენ მცდელობას აჩვენებს.",
-    invalidation: "თუ ფასი დიაპაზონს რომელიმე მხარეს მკაფიოდ გასცდა, ფიგურა ძალას კარგავს.",
+    lower: "დიაპაზონის ქვედა საზღვარი; ქვემოთ გარღვევა კლების მცდელობაზე მიუთითებს.",
+    upper: "დიაპაზონის ზედა საზღვარი; ზემოთ გარღვევა ზრდის მცდელობაზე მიუთითებს.",
+    invalidation: "თუ ფასი დიაპაზონს რომელიმე მხარეს მკაფიოდ გასცდება, ფიგურა ძალას კარგავს.",
   },
 };
 
 // Is the pattern clear or weak — without promising anything.
 function confidenceNote(c) {
-  if (c >= 0.85) return "ძალიან ნათელი სურათია.";
-  if (c >= 0.75) return "სურათი მკაფიოა, თუმცა გარანტია არ არსებობს.";
-  return "ფიგურა ჯერ სუსტია — სიფრთხილე ჯობს.";
+  if (c >= 0.85) return "სურათი ძალიან მკაფიოა.";
+  if (c >= 0.75) return "სურათი მკაფიოა, თუმცა ბაზარზე აბსოლუტური გარანტია არ არსებობს.";
+  return "ფიგურა ჯერ სუსტია — საჭიროა სიფრთხილე.";
 }
 
 // Shared copy pieces for one pattern, used by both the text and HTML renderings.
@@ -520,17 +520,17 @@ function patternCopy(pa) {
   };
 }
 
-// Educational chart-pattern block (plain text): beginner-friendly Georgian, with
-// each level explained in plain language (ქვედა/ზედა ზონა, not dry support/
-// resistance labels). Describes the structure only — no buy/sell language.
+// Educational chart-pattern block (plain text): Georgian in standard trading terms
+// (მხარდაჭერა / წინააღმდეგობა), each level followed by a plain-language note.
+// Describes the structure only — no buy/sell language.
 function patternBlockText(pa) {
   const c = patternCopy(pa);
   return [
     `📊 ${c.head}`,
-    `ქვედა ზონა: ${fmtPrice(pa.supportLevel)} — ${c.lower}`,
-    `ზედა ზონა: ${fmtPrice(pa.resistanceLevel)} — ${c.upper}`,
-    `გაუქმება: ${fmtPrice(pa.invalidationLevel)} — ${c.invalidation}`,
-    `ფიგურის სანდოობა: ${Math.round(pa.confidence * 100)}% — ${c.confidence}`,
+    `მხარდაჭერა: ${fmtPrice(pa.supportLevel)} — ${c.lower}`,
+    `წინააღმდეგობა: ${fmtPrice(pa.resistanceLevel)} — ${c.upper}`,
+    `სცენარის გაუქმება: ${fmtPrice(pa.invalidationLevel)} — ${c.invalidation}`,
+    `სანდოობა: ${Math.round(pa.confidence * 100)}% — ${c.confidence}`,
   ].join("\n");
 }
 
@@ -676,10 +676,10 @@ function patternHtml(pa) {
         <div style="background:#0b0e11;border-left:3px solid #3b82f6;border-radius:8px;padding:14px 16px;margin:0 0 14px;">
           <div style="color:#d6dae0;font-size:14px;line-height:1.6;margin-bottom:10px;">📊 ${esc(c.head)}</div>
           <div style="color:#b7bdc6;font-size:13px;line-height:1.6;">
-            ${line("ქვედა ზონა", fmtPrice(pa.supportLevel), c.lower)}
-            ${line("ზედა ზონა", fmtPrice(pa.resistanceLevel), c.upper)}
-            ${line("გაუქმება", fmtPrice(pa.invalidationLevel), c.invalidation)}
-            ${line("ფიგურის სანდოობა", `${Math.round(pa.confidence * 100)}%`, c.confidence)}
+            ${line("მხარდაჭერა", fmtPrice(pa.supportLevel), c.lower)}
+            ${line("წინააღმდეგობა", fmtPrice(pa.resistanceLevel), c.upper)}
+            ${line("სცენარის გაუქმება", fmtPrice(pa.invalidationLevel), c.invalidation)}
+            ${line("სანდოობა", `${Math.round(pa.confidence * 100)}%`, c.confidence)}
           </div>
         </div>`;
 }

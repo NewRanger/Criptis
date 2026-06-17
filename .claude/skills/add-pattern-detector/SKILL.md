@@ -107,9 +107,11 @@ while a swing-structure pattern means a **new detector file**.
    from `PATTERN_COPY` in [watcher.js](../../../watcher.js). Add an entry keyed by
    the exact `patternName` with: `ka` (Georgian name), `dir` (`"bull"` / `"bear"`
    / `"neutral"`, which selects `ZONE_COPY`), and a one-sentence Georgian `trend`
-   description written for a complete beginner — descriptive, never advisory, no
-   buy/sell language. Without an entry it silently falls back to
-   `PATTERN_FALLBACK` (generic copy), which is a regression in user experience.
+   description. Write the Georgian per the project's translation rules — standard
+   trading terminology (`მხარდაჭერა` / `წინააღმდეგობა`), modern literary Georgian,
+   no calques/barbarisms, concise; descriptive only, never advisory, no buy/sell
+   language. Without an entry it silently falls back to `PATTERN_FALLBACK` (generic
+   copy), which is a regression in user experience.
 
 7. **Update the docs** — extend the catalogue table / Scope section in
    [patterns/README.md](../../../patterns/README.md) so the doc still matches the
