@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import { fetchSeries } from "./datasource.js";
 import { forecastVolatility, levelMap } from "./volatility.js";
-import { resolveRecipients, RISK_NOTE } from "./watcher.js";
+import { resolveRecipients } from "./watcher.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "config.json");
@@ -41,7 +41,7 @@ function loadState() {
   return { coins: {} };
 }
 
-// --- formatting + Georgian copy (formal თქვენ; standard terms; with RISK_NOTE) ----
+// --- formatting + Georgian copy (formal თქვენ; standard trading terms) ------------
 const fmtPrice = (n) =>
   !Number.isFinite(n) ? "—" : n >= 1
     ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
@@ -49,58 +49,76 @@ const fmtPrice = (n) =>
 const fmtMove = (n) => (Number.isFinite(n) ? `±${n.toFixed(1)}%` : "—");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// Why the storm — calm-before-the-storm (squeeze) vs already-turbulent (persistence).
-const causeKa = (f) =>
-  f.reason === "squeeze-expansion"
-    ? "ბაზარი ჩაცხრა და მერყეობა მინიმუმზეა — ხშირად ეს ძლიერი მოძრაობის წინამორბედია."
-    : "მერყეობა უკვე აშკარად გაზრდილია და, სავარაუდოდ, უახლოეს საათებში გაგრძელდება.";
+// Forecast-specific disclaimer (shorter than the watcher/trader risk note).
+const FORECAST_DISCLAIMER =
+  "გაფრთხილება: ეს არის ალგორითმული ანალიზი და არა ფინანსური რჩევა. ივაჭრეთ პასუხისმგებლობით (DYOR).";
 
-function directionLine(lm) {
-  const parts = [];
-  if (Number.isFinite(lm.resistance)) parts.push(`წინააღმდეგობის (${fmtPrice(lm.resistance)}) ზემოთ დახურვა — ზრდისკენ მცდელობა`);
-  if (Number.isFinite(lm.support)) parts.push(`მხარდაჭერის (${fmtPrice(lm.support)}) ქვემოთ — კლებისკენ`);
-  if (!parts.length) return "მკაფიო დონეები ამ მონაკვეთზე არ იკვეთება.";
-  return `მიმართულებას გარღვევა გამოავლენს: ${parts.join("; ")}. მიმართულების წინასწარი პროგნოზი არ კეთდება.`;
+// One-sentence "why" — consolidation/squeeze vs already-turbulent — plus expected move.
+function analysisText(f) {
+  const cause =
+    f.reason === "squeeze-expansion"
+      ? "ბაზარზე ამჟამად მინიმალური მოძრაობაა (კონსოლიდაცია), რაც ხშირად მკვეთრი ნახტომის წინაპირობაა."
+      : "ბაზარზე მერყეობა უკვე მკვეთრად გაზრდილია და, სავარაუდოდ, უახლოეს საათებში გაგრძელდება.";
+  return `${cause} ფასის სავარაუდო ცვლილება: ~${fmtMove(f.expectedMovePct)}.`;
+}
+
+// Direction is unforecastable — hand over the levels whose break reveals it.
+function levelScenarios(lm) {
+  const out = [];
+  if (Number.isFinite(lm.resistance)) out.push(`ზრდის სცენარი: წინააღმდეგობის (${fmtPrice(lm.resistance)}) ზემოთ დაფიქსირება.`);
+  if (Number.isFinite(lm.support)) out.push(`კლების სცენარი: მხარდაჭერის (${fmtPrice(lm.support)}) ქვემოთ გარღვევა.`);
+  return out;
 }
 
 function cardText(w) {
-  const { coin, f, lm } = w;
-  return [
-    `🌩️ ${coin.toUpperCase()} — მოსალოდნელია გაზრდილი მერყეობა`,
-    `უახლოეს ~${f.horizonHours}სთ-ში ძლიერი რყევის ალბათობა ~${Math.round(f.probability * 100)}%. ${causeKa(f)}`,
-    `მოსალოდნელი რყევის მასშტაბი: ~${fmtMove(f.expectedMovePct)} (მიმდინარე ფასი ${fmtPrice(lm.price)}).`,
-    `${directionLine(lm)}`,
-    `👉 თუ პოზიცია გაქვთ, განიხილეთ რისკის მართვა: სტოპ-ლოსის (stop-loss) დაყენება ან მოცულობის შემცირება.`,
-  ].join("\n");
+  const { coin, ticker, f, lm } = w;
+  const levels = levelScenarios(lm);
+  const out = [
+    `${coin.toUpperCase()} (${ticker})`,
+    ``,
+    `⚠️ მოსალოდნელია მაღალი მერყეობა`,
+    `ალბათობა: ~${Math.round(f.probability * 100)}% | დრო: ~${f.horizonHours} სთ | მიმდინარე ფასი: ${fmtPrice(lm.price)}`,
+    ``,
+    `ანალიზი: ${analysisText(f)}`,
+  ];
+  if (levels.length) out.push(``, `საკვანძო დონეები (მიმართულება უცნობია):`, ...levels);
+  out.push(``, `🛡 რისკების მართვა: განიხილეთ სტოპ-ლოსის (Stop-Loss) გამოყენება ან პოზიციის მოცულობის შემცირება.`);
+  return out.join("\n");
 }
 
 function cardHtml(w) {
-  const { coin, f, lm } = w;
+  const { coin, ticker, f, lm } = w;
+  const levels = levelScenarios(lm);
+  const levelBlock = levels.length
+    ? `<div style="color:#b7bdc6;font-size:13px;line-height:1.7;margin:0 0 12px;">
+          <div style="color:#848e9c;margin-bottom:4px;">საკვანძო დონეები (მიმართულება უცნობია):</div>
+          ${levels.map((l) => `<div>${esc(l)}</div>`).join("")}
+        </div>`
+    : "";
   return `
       <div style="background:#1e2329;border-left:4px solid #f0b90b;border-radius:12px;padding:18px 20px;margin:0 0 16px;">
-        <div style="color:#eaecef;font-size:15px;font-weight:700;letter-spacing:.5px;">🌩️ ${esc(coin.toUpperCase())}</div>
-        <div style="color:#fff;font-size:19px;font-weight:700;margin:4px 0 10px;">მოსალოდნელია გაზრდილი მერყეობა</div>
-        <div style="display:inline-block;background:#f0b90b;color:#181a20;font-weight:700;font-size:13px;padding:4px 12px;border-radius:6px;margin-bottom:12px;">ალბათობა ~${Math.round(f.probability * 100)}% · ~${f.horizonHours}სთ</div>
-        <div style="color:#d6dae0;font-size:13px;line-height:1.6;margin:0 0 8px;">${esc(causeKa(f))}</div>
-        <div style="color:#b7bdc6;font-size:13px;line-height:1.6;margin:0 0 8px;">მოსალოდნელი მასშტაბი: <strong style="color:#eaecef;">~${esc(fmtMove(f.expectedMovePct))}</strong> · მიმდინარე ფასი ${esc(fmtPrice(lm.price))}</div>
-        <div style="color:#b7bdc6;font-size:13px;line-height:1.6;margin:0 0 8px;">${esc(directionLine(lm))}</div>
-        <div style="color:#eaecef;font-size:13px;font-weight:600;background:#0b0e11;border-radius:6px;padding:9px 11px;">👉 თუ პოზიცია გაქვთ, განიხილეთ რისკის მართვა: სტოპ-ლოსის (stop-loss) დაყენება ან მოცულობის შემცირება.</div>
+        <div style="color:#eaecef;font-size:16px;font-weight:700;letter-spacing:.3px;">${esc(coin.toUpperCase())} <span style="color:#848e9c;font-weight:600;">(${esc(ticker)})</span></div>
+        <div style="color:#fff;font-size:18px;font-weight:700;margin:8px 0 10px;">⚠️ მოსალოდნელია მაღალი მერყეობა</div>
+        <div style="display:inline-block;background:#0b0e11;color:#eaecef;font-size:13px;padding:6px 12px;border-radius:6px;margin-bottom:12px;">ალბათობა: <strong>~${Math.round(f.probability * 100)}%</strong> &nbsp;|&nbsp; დრო: ~${f.horizonHours} სთ &nbsp;|&nbsp; ფასი: ${esc(fmtPrice(lm.price))}</div>
+        <div style="color:#d6dae0;font-size:13px;line-height:1.7;margin:0 0 12px;"><strong style="color:#eaecef;">ანალიზი:</strong> ${esc(analysisText(f))}</div>
+        ${levelBlock}
+        <div style="color:#eaecef;font-size:13px;font-weight:600;background:#0b0e11;border-radius:6px;padding:10px 12px;">🛡 რისკების მართვა: განიხილეთ სტოპ-ლოსის (Stop-Loss) გამოყენება ან პოზიციის მოცულობის შემცირება.</div>
       </div>`;
 }
 
 function buildText(ws) {
-  return `${ws.map(cardText).join("\n\n")}\n\n${RISK_NOTE}\n— Criptis (მერყეობის გაფრთხილება)`;
+  return `${ws.map(cardText).join("\n\n──────────\n\n")}\n\n${FORECAST_DISCLAIMER}\n— Criptis · კოინ-ტრეიდერ ასისტენტი`;
 }
 function buildHtml(ws) {
   return `<!doctype html><html><body style="margin:0;padding:20px;background:#181a20;font-family:Arial,Helvetica,sans-serif;">
     <div style="max-width:600px;margin:0 auto;">
-      <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">🌩️ Criptis — მერყეობის გაფრთხილება</div>
+      <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">🌩️ Criptis — ვოლატილობის გაფრთხილება</div>
       ${ws.map(cardHtml).join("")}
-      <div style="color:#9aa3ad;font-size:11px;margin-top:16px;line-height:1.5;">${esc(RISK_NOTE)}<br>Criptis · კოინ-ტრეიდერ ასისტენტი</div>
+      <div style="color:#9aa3ad;font-size:11px;margin-top:16px;line-height:1.5;">${esc(FORECAST_DISCLAIMER)}<br>Criptis · კოინ-ტრეიდერ ასისტენტი</div>
     </div>
   </body></html>`;
 }
-const buildSubject = (ws) => `🌩️ Criptis — მოსალოდნელია ძლიერი მერყეობა: ${ws.map((w) => w.coin.toUpperCase()).join(" · ")}`;
+const buildSubject = (ws) => `🌩️ Criptis — ვოლატილობის გაფრთხილება: ${ws.map((w) => w.ticker).join(" · ")}`;
 
 // --- send (Resend; retry to the first recipient alone, like the watcher) -----
 async function sendEmail(subject, text, html) {
@@ -149,6 +167,7 @@ async function main() {
       console.error(`${coin}: fetch failed — skipped: ${err.message}`);
       continue;
     }
+    const ticker = series.product ? series.product.split("-")[0] : coin.toUpperCase();
     const f = forecastVolatility(series, { horizon: fc.horizon, stormProb: fc.stormProb });
     const lm = levelMap(series);
     console.log(`${coin}: level ${f.level} · storm-prob ${Math.round(f.probability * 100)}% · ~${fmtMove(f.expectedMovePct)} (${f.reason})`);
@@ -159,7 +178,7 @@ async function main() {
       console.log(`  ${coin}: storm likely but in cooldown (${Math.round((now - entry.lastStormAt) / HOUR)}h ago) — not re-sending`);
       continue;
     }
-    warnings.push({ coin, f, lm });
+    warnings.push({ coin, ticker, f, lm });
     state.coins[coin] = { ...entry, lastStormAt: now };
   }
 
