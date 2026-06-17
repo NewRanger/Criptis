@@ -13,6 +13,8 @@
     "trader": "node trader.js",
     "trader:dry": "node trader.js --dry-run",
     "backtest": "node backtest/run.mjs",
+    "forecast": "node forecast.js",
+    "forecast:dry": "node forecast.js --dry-run",
     "test": "node --test"
   }
 }

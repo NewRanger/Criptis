@@ -25,9 +25,16 @@ assistant — recommendation + entry / stop / target + a risk note, via Resend) 
   `index` (`detectPatterns`, the orchestrator). `patterns/README.md` is the spec;
   `patterns/fixtures/` holds the synthetic builders + committed JSON snapshots.
 - `indicators.js` — Bollinger `breakoutPrefilter`, `volumeTrend`.
-- `signals.js` — the daily **decision layer**; `evaluateSignal(series, opts)` → one verdict
-  per coin (`STRONG_BUY/BUY/WATCH/NEUTRAL/SELL/STRONG_SELL` + confidence + risk geometry).
-  Reuses the detectors; computes EMA/RSI/MACD/regime itself. Self-review only.
+- `signals.js` — daily **decision layer**; `evaluateSignal(series, opts)` → one verdict per
+  coin (`STRONG_BUY/BUY/WATCH/NEUTRAL/SELL/STRONG_SELL` + confidence + risk geometry),
+  rendered as advice in the daily trader email. Computes EMA/RSI/MACD/regime itself.
+  NOTE: the backtest proved its DIRECTIONAL edge is ~50% (a coin flip) — see the rules below.
+- `volatility.js` — the **storm forecaster** (the honest predictive layer):
+  `forecastVolatility(series)` → P(big move in the next ~12–24h) + expected range;
+  `levelMap(series)` → the support/resistance whose break reveals direction. Volatility IS
+  forecastable (~60%); direction is not.
+- `forecast.js` — hourly runner: emails a Georgian **storm warning** + level map when a big
+  move is likely (per-coin cooldown via `forecast-state.json`, committed by CI).
 - `watcher.js` — the runtime: price triggers, `analyze()` (LLM analysis paragraph),
   Resend email, and the Georgian email copy (`PATTERN_COPY`, `ZONE_COPY`, `STRUCTURAL_NOTE`).
 - `config.json` — **committed** config (no secrets): `coins`, the three price triggers
@@ -51,6 +58,9 @@ assistant — recommendation + entry / stop / target + a risk note, via Resend) 
 - `node patterns/fixtures/build-fixtures.mjs` — regenerate the committed fixture snapshots.
 - `node backtest/run.mjs --fetch` — download history + recalibrate; writes `backtest/calibration.json`
   (omit `--fetch` to reuse cached history under `backtest/cache/`).
+- `node backtest/structure.mjs` / `node backtest/volforecast.mjs` — diagnostics: is direction
+  forecastable (no) / is volatility forecastable (yes, ~60%).
+- `node forecast.js --dry-run` — preview the hourly storm warning (no send, no state write).
 
 ## Always-true rules
 
@@ -79,6 +89,14 @@ assistant — recommendation + entry / stop / target + a risk note, via Resend) 
   auto-execute** (no orders are placed; the human acts).
 - Calibrate thresholds/weights against the `backtest/` harness on out-of-sample history,
   never against the chart currently on screen.
+
+**Forecast / prediction — READ THIS before any "predict price" work**
+- The backtest **proved price DIRECTION is a random walk**: ~50% out-of-sample across
+  trend-following + mean-reversion, hourly + daily (see `backtest/`, and the
+  `prediction-edge-findings` memory). Do NOT build or sell directional prediction — it's noise.
+- What IS forecastable is **volatility** (~60%): `forecast.js` warns of likely big moves
+  ("a storm is coming") via `volatility.js`; **direction is surfaced only reactively via the
+  level map, never as a forecast.** Keep probabilities conservative and backtest-grounded.
 
 **Git**
 - **NEVER commit or push.** The owner commits everything (`config.json`, `state.json`,

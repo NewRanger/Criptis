@@ -3,4 +3,5 @@ node_modules/
 *.log
 email-preview.html
 trader-preview.html
+forecast-preview.html
 backtest/cache/

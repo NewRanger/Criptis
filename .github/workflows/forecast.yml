@@ -1,0 +1,48 @@
+name: Criptis storm forecast
+
+on:
+  schedule:
+    # Hourly, offset from the watcher (:13) and trader jobs to avoid colliding.
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+# Write: the forecast commits its cooldown state (forecast-state.json) so a storm
+# warning isn't re-sent every hour while volatility stays elevated.
+permissions:
+  contents: write
+
+concurrency:
+  group: criptis-forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run storm forecast
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Alert recipients (comma-separated) — kept out of the committed config.
+          ALERT_RECIPIENTS: ${{ secrets.ALERT_RECIPIENTS }}
+          # Prices come from Coinbase (no key). Volatility forecast is deterministic —
+          # no ANTHROPIC_API_KEY needed.
+        run: node forecast.js
+
+      - name: Commit forecast cooldown state
+        run: |
+          git add forecast-state.json
+          if git diff --cached --quiet; then
+            echo "forecast-state.json unchanged, nothing to commit"
+          else
+            git config user.name "criptis-bot"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: update forecast state [skip ci]"
+            git push
+          fi

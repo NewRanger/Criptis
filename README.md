@@ -1,130 +1,133 @@
 # Criptis
 
-Crypto price watcher that runs entirely on GitHub Actions — no server, no local cron. It emails AI-written alerts when the market moves and publishes a live, descriptive dashboard.
+A crypto **trader assistant** that runs entirely on GitHub Actions — no server, no local cron. It watches the market, emails **advisory**, beginner-friendly **Georgian** alerts (recommendation + the levels that matter + a risk note), and publishes a live dashboard.
 
-Every hour a workflow runs `watcher.js`, which gathers professional-grade market data — 48h of true hourly OHLCV candles per coin from the Coinbase public API, plus a few recent news headlines (CryptoPanic) — derives the latest price, folds it into a set of descriptive indicators, and compares it against the committed `state.json`. It publishes `public/data.json` for the dashboard on **every** run, and **only when a deterministic trigger fires** does it consider an alert: a trigger that clears a Bollinger-band + volume **breakout pre-filter** earns a structured, beginner-friendly **Georgian** analysis from the Anthropic API; one that doesn't gets a raw-numbers alert with no LLM call. Either way you're emailed via Resend. The LLM is never the polling loop — it only writes the analysis after a trigger clears the pre-filter.
+## The honest core — what it can and can't predict
 
-## How it works
+Criptis was backtested rigorously before any advice was wired in (see [`backtest/`](backtest/)), and the data is blunt:
 
-```
-GitHub Actions (cron hourly)
-  └─ watcher.js
-       ├─ gather market data (before any trigger is evaluated):
-       │    • OHLCV — 48h of hourly candles per coin (Coinbase, free, no key; retry once)
-       │    • news  — top 3 headlines (CryptoPanic, optional key; [] if missing/fails)
-       ├─ derive spot price = latest close (missing ≠ 0); no coin priced → exit 1
-       ├─ load state.json, keep last 48 price points per coin (~48h)
-       ├─ enrich each coin → descriptive readout (trend/R², RSI, %B, momentum, volume)
-       ├─ publish public/data.json for the dashboard (every run, even with no alert)
-       ├─ trigger if:
-       │    • change since last check  > 1.5%  (changeThresholdPct)
-       │    • drift vs ~24h ago        > 4%   (driftThresholdPct, slow-bleed)
-       │    • N checks in a row one way  = 5   (streakLength, steady trend)
-       ├─ on trigger → breakout pre-filter (price outside Bollinger band on rising volume):
-       │    • PASS → Anthropic claude-sonnet-4-6 returns a STRUCTURED, Georgian analysis
-       │      (pattern · bias · invalidation level · 3-bullet beginner summary)
-       │    • FAIL → raw-numbers "structural alert", no LLM call
-       │    (30s timeout — a failed call never blocks the email)
-       ├─ one combined email via Resend for all triggered coins
-       │    (HTML card per coin + QuickChart sparkline; plain-text fallback;
-       │     sent to all recipients, retried to email.to[0] alone on failure)
-       └─ always write state.json + public/data.json → workflow commits them [skip ci]
-```
+- **Price direction is a random walk.** Across 5 coins, hourly and daily, trend-following *and* mean-reversion all scored ~50% out-of-sample. **Nobody — and no model here — can reliably forecast up vs. down at these horizons.** Criptis does **not** pretend to.
+- **Volatility is forecastable (~60%).** Big moves cluster, so "a storm is coming" *can* be called ahead of time. That's the genuinely useful, weather-app part.
+
+So Criptis works like a weather forecast: it can't tell you the exact move, but it **warns you a storm (a big move) is likely**, hands you the **support/resistance levels** whose break reveals the direction *when it happens*, and tells you to manage risk. It **advises but never executes** — it places no orders; you decide and act. Every email carries a risk note (high-risk / your own decision / DYOR).
+
+## The three jobs
+
+| Job | Cadence | What it sends |
+|---|---|---|
+| **watch** (`watcher.js`) | hourly | Deterministic price/pattern triggers → an advisory email: a recognised chart pattern with a **recommendation**, support/resistance, invalidation, and (on a confirmed Bollinger breakout) an AI-written Georgian analysis with a recommended action. Publishes `public/data.json` for the dashboard every run. |
+| **forecast** (`forecast.js`) | hourly | A **volatility "storm" warning** when a big move is likely in the next ~12–24h: probability, expected swing size, the level map (break of which reveals direction), and risk-management advice. |
+| **trader** (`signals.js` → `trader.js`) | daily | A regime-aware **verdict** per coin (BUY/SELL/WATCH/… + confidence + entry/stop/target/R:R), emailed as advice for the actionable ones. NOTE: the backtest shows this layer's *directional* edge is ~50% — treat it as structured context, not a crystal ball. |
+
+All three pull **OHLCV from the Coinbase public API** (free, no key, US-runner-safe), gather optional news headlines (CryptoPanic), and email via **Resend**.
 
 ## Dashboard
 
-Every run writes `public/data.json` — a stateless snapshot of each coin's spot price, descriptive readout and 48h of hourly candles (rewritten in full each time, unlike the rolling `state.json`). [`index.html`](index.html) is a dependency-free dashboard (vanilla JS, no build step) that reads that feed and renders a card per coin: price, a price sparkline, a plain-language trend verdict, and indicator chips (RSI gauge, %B band position, momentum, volume) with Georgian glossary tooltips. It's an installable PWA (`manifest.json` + `sw.js`).
-
-The UI is purely **descriptive — never advisory**, in Georgian for a complete beginner. Host the repo root as a static site (GitHub Pages, Netlify, or any static host); the page fetches `./public/data.json`, which CI refreshes hourly.
+Every `watch` run rewrites `public/data.json` — a stateless snapshot of each coin's spot price, a descriptive readout, detected chart patterns (shadow mode), and 48h of hourly candles. [`index.html`](index.html) is a dependency-free PWA (vanilla JS, no build) that renders a card per coin with a sparkline and indicator chips, Georgian throughout. Host the repo root as a static site (GitHub Pages, Netlify, any static host).
 
 ## Setup
 
-### 1. Resend (email notifications)
+### 1. Resend (email)
 
-1. Create a free account at [resend.com](https://resend.com).
-2. **API Keys → Create API Key** — copy the `re_...` key.
-3. Sender address: the default `onboarding@resend.dev` works out of the box, but Resend only delivers it to **your own account email**. To send to any address, verify a domain under **Domains** and change `email.from` in `config.json` to something like `Criptis <alerts@yourdomain.com>`.
-4. Set the recipient(s) via the **`ALERT_RECIPIENTS`** env var — a comma-separated list (e.g. `you@example.com,friend@example.com`) — so personal addresses stay out of the committed `config.json`. In CI it's a repo secret (see §4); locally, export it before a real run. `config.json` → `email.to` is an optional fallback if the env var is unset. **Order matters:** the watcher sends one email to all recipients at once, and if that send fails it retries to the **first** recipient **alone** — so list the Resend **account-owner** address first. (That retry is the safety net for the `onboarding@resend.dev` sender, which rejects the whole send if any recipient isn't the account owner.)
+1. Create a free account at [resend.com](https://resend.com) and make an API key (`re_...`).
+2. Sender: the default `onboarding@resend.dev` only delivers to **your own account email**. To send to anyone, verify a domain and set `email.from` in `config.json` (e.g. `Criptis <alerts@yourdomain.com>`).
+3. Recipients come from the **`ALERT_RECIPIENTS`** env var (comma-separated) so personal addresses stay out of the committed `config.json`. **Order matters:** all emails go to everyone at once, and a failed send retries to the **first** recipient alone — so list the Resend **account-owner** address first.
 
-### 2. Anthropic
+### 2. Anthropic (the `watch` analysis paragraph)
 
-Get an API key from [console.anthropic.com](https://console.anthropic.com). Alerts still work without it (raw numbers, no analysis paragraph), but you want the paragraph.
+Get a key at [console.anthropic.com](https://console.anthropic.com). The `watch` email's AI analysis needs it; without it that email falls back to raw numbers. The `forecast` and `trader` jobs are deterministic and need no key.
 
-### 3. CryptoPanic (optional — news headlines)
+### 3. CryptoPanic (optional — news)
 
-Get a free auth token at [cryptopanic.com/developers/api](https://cryptopanic.com/developers/api/). It adds recent crypto news headlines to the analysis context. Entirely optional: without the key (or on any failure) the watcher just runs with no news — prices, triggers and email are unaffected. Prices come from Coinbase and never need a key.
+Free token at [cryptopanic.com/developers/api](https://cryptopanic.com/developers/api/). Adds headlines to the analysis context; entirely optional.
 
 ### 4. Repo secrets
 
-In the GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**
+**Settings → Secrets and variables → Actions → New repository secret**
 
-| Secret | Value |
-|---|---|
-| `RESEND_API_KEY` | your `re_...` key |
-| `ALERT_RECIPIENTS` | comma-separated alert recipients (e.g. `you@example.com,friend@example.com`) |
-| `ANTHROPIC_API_KEY` | your `sk-ant-...` key |
-| `CRYPTOPANIC_API_KEY` | your CryptoPanic auth token (optional) |
+| Secret | Used by | Value |
+|---|---|---|
+| `RESEND_API_KEY` | all three | your `re_...` key |
+| `ALERT_RECIPIENTS` | all three | comma-separated recipients (owner first) |
+| `ANTHROPIC_API_KEY` | watch | your `sk-ant-...` key |
+| `CRYPTOPANIC_API_KEY` | watch | CryptoPanic token (optional) |
 
-Never put keys or personal recipient addresses in `config.json` — it's committed.
+Never put keys or personal addresses in `config.json` — it's committed.
 
-### 5. Enable the workflow
+### 5. Enable the workflows
 
-Push the repo, then check **Actions** tab → enable workflows if prompted. Test immediately with **Criptis watch → Run workflow** (manual dispatch). The first run only seeds history — alerts need at least two data points.
-
-Note: GitHub disables scheduled workflows after 60 days without repo activity; the state commits each run keep it alive as long as prices move.
+See [Enabling the workflows](#enabling-the-workflows-in-github-actions) below.
 
 ## Configuration (`config.json`)
 
 ```json
 {
-  "coins": ["bitcoin"],
-  "changeThresholdPct": 1.5,
-  "driftThresholdPct": 4,
-  "streakLength": 5,
-  "email": {
-    "to": ["you@example.com", "someone-else@example.com"],
-    "from": "Criptis <onboarding@resend.dev>"
-  }
+  "coins": ["bitcoin", "ethereum", "solana", "ripple", "dogecoin"],
+  "changeThresholdPct": null,
+  "driftThresholdPct": null,
+  "streakLength": null,
+  "patternAlerts": { "enabled": true, "minConfidence": 0.75, "cooldownHours": 12 },
+  "forecast": { "stormProb": 0.6, "cooldownHours": 12, "horizon": 24, "candles": 300 },
+  "traderSignals": { "minConfidence": 0.5, "granularity": 86400, "candles": 300, "includeWatch": false },
+  "email": { "to": [], "from": "Criptis <alerts@criptis.dev>" }
 }
 ```
 
-- **coins** — coin ids (`bitcoin`, `ethereum`, `solana`, …). Each maps to a Coinbase USD pair via `COINBASE_PRODUCTS` in `datasource.js`; adding a coin not in that map logs a warning and skips it, so add the mapping (e.g. `litecoin: "LTC-USD"`) when you add a coin.
-- **changeThresholdPct** — alert when the move since the last check (~2h) exceeds this. Lower = noisier. Set to `null` to **pause** this trigger.
-- **driftThresholdPct** — alert when the price has drifted this far from ~24h ago, even if each 2h step was small. Catches slow bleeds. Set to `null` to **pause** this trigger.
-- **streakLength** — alert when this many checks in a row (~2h each) move the same direction, even if no single step or the 24h drift crossed a threshold. Catches a steady grind. Fires once when the streak forms, then stays quiet until it breaks. Default 5 (~10h); set higher to require a longer trend, or `null` to **pause** this trigger.
-
-> **Note:** all three price triggers (`changeThresholdPct`, `driftThresholdPct`, `streakLength`) are currently `null` (paused) — only the opt-in **patternAlerts** path raises emails. Restore the numeric values (e.g. `1.5` / `4` / `3`) to re-enable them.
-- **email.to** — optional fallback recipient(s) (a string or an array) used only when the `ALERT_RECIPIENTS` env var is unset. Prefer `ALERT_RECIPIENTS` (see Setup §1) so addresses aren't committed; if you do list any here, put the Resend **account-owner** address **first**.
-- **email.from** — sender; must be `onboarding@resend.dev` or an address on a domain you've verified in Resend.
+- **coins** — CoinGecko ids; each must be mapped to a Coinbase USD pair in `COINBASE_PRODUCTS` (`datasource.js`). An unmapped coin is skipped with a warning. (Use the `add-coin` skill.)
+- **changeThresholdPct / driftThresholdPct / streakLength** — the three `watch` price triggers; a finite number arms one, `null` pauses it. **All three are currently paused**, so the `watch` email is raised only by the **patternAlerts** path. Restore numeric values (e.g. `1.5` / `4` / `5`) to re-enable. (Use the `manage-triggers` skill.)
+- **patternAlerts** — `enabled` gates educational chart-pattern emails; `minConfidence` and `cooldownHours` tune them.
+- **forecast** — storm warning: `stormProb` (probability at which to warn), `cooldownHours`, `horizon` (bars ahead, 24 = ~24h), `candles` fetched.
+- **traderSignals** — daily verdict: `minConfidence` to email, `granularity` (86400 = daily), `candles`, `includeWatch`.
+- **email.from / email.to** — sender, and an optional fallback recipient list used only when `ALERT_RECIPIENTS` is unset.
 
 ## Local testing
 
 ```bash
-# real prices, print the email instead of sending, don't touch state.json
+# hourly watch email — real prices, printed not sent, state untouched; writes email-preview.html
 node watcher.js --dry-run
 
-# force the trigger path without a real market move:
-node watcher.js                          # seed state with the real price
-node watcher.js --dry-run --mock-price 1 # huge "drop" → trigger fires, email printed
-git checkout state.json                  # discard the locally seeded state
+# hourly storm forecast — printed not sent; writes forecast-preview.html
+node forecast.js --dry-run
+
+# daily trader signals — printed not sent; writes trader-preview.html
+node trader.js --dry-run
+
+# full test suite (patterns, signals, volatility, watcher, backtest, …)
+node --test
+
+# calibration: download history + measure what's forecastable
+node backtest/run.mjs --fetch          # writes backtest/calibration.json
+node backtest/structure.mjs            # direction: momentum / mean-reversion / random walk?
+node backtest/volforecast.mjs          # volatility: how accurate (~60%)?
 ```
 
-`--dry-run` skips both the Resend send and the `state.json` write. The Anthropic call still happens if `ANTHROPIC_API_KEY` is set in your environment, so a real-price `--dry-run` during an actual breakout previews the AI analysis. It also writes the rendered HTML email to `email-preview.html` (gitignored) — open it in a browser to see the card and chart exactly as they'll send.
+`--dry-run` never sends and never writes state; for the `watch` job set `ANTHROPIC_API_KEY` first to preview the real AI paragraph. (See the `preview-alert` skill.)
 
-Note: `--mock-price` synthesizes a flat candle series, so it **fails the breakout pre-filter** — that path exercises the trigger + email plumbing and prints the raw-numbers "structural alert", not the AI paragraph (which needs real candles).
+## Enabling the workflows in GitHub Actions
+
+1. **Push the repo**, then open the **Actions** tab. If GitHub shows "Workflows aren't running," click **"I understand my workflows, go ahead and enable them."** Scheduled workflows only start once their file is on the **default branch**.
+2. **Allow the bot to commit state.** Settings → Actions → General → **Workflow permissions** → select **Read and write permissions**. The `watch` and `forecast` jobs commit `state.json` / `public/data.json` / `forecast-state.json` back, so without this their commit step fails.
+3. **Confirm the secrets** from §4 are set.
+4. **Test each immediately** (don't wait for the cron): Actions → pick a workflow (*Criptis watch*, *Criptis storm forecast*, *Criptis daily signals*) → **Run workflow** (manual dispatch).
+5. The schedules: `watch` and `forecast` run hourly (offset at :13 and :37), `trader` daily at 00:20 UTC. GitHub disables scheduled workflows after 60 days without repo activity; the state commits keep them alive as long as prices move.
 
 ## Files
 
-| File | Purpose |
+| File / dir | Purpose |
 |---|---|
-| `watcher.js` | orchestrator — gather → derive → enrich → publish → trigger → pre-filter → email |
-| `datasource.js` | Coinbase OHLCV fetch (48h of hourly candles per coin; retries once) |
-| `news.js` | CryptoPanic headline fetch (optional; never rejects, returns `[]` on failure) |
-| `indicators.js` | descriptive readout (RSI, %B, momentum, R², volume) + Bollinger/volume breakout pre-filter |
-| `config.json` | coins, thresholds, email addresses — no secrets |
-| `state.json` | rolling price history, committed back by CI |
-| `public/data.json` | dashboard feed — per-coin price, readout & 48h candles; rewritten in full every run |
-| `index.html` | static dashboard (vanilla JS, no build) that reads `public/data.json` |
-| `manifest.json`, `sw.js` | PWA manifest + service worker |
-| `prompts/analysis.md` | system prompt for the analysis — edit freely, it's versioned separately from code |
-| `.github/workflows/watch.yml` | hourly schedule; commits `state.json` & `public/data.json` |
+| `watcher.js` | hourly orchestrator — triggers → pattern alerts → AI analysis → advisory email + dashboard feed |
+| `signals.js` | daily decision layer — `evaluateSignal()` → one verdict per coin |
+| `trader.js` | daily runner — emails the actionable verdicts |
+| `volatility.js` | the storm forecaster — `forecastVolatility()` + `levelMap()` |
+| `forecast.js` | hourly runner — emails volatility storm warnings |
+| `indicators.js` | descriptive readout + Bollinger/volume breakout pre-filter |
+| `patterns/` | pure, deterministic chart-pattern detection (see `patterns/README.md`) |
+| `backtest/` | calibration harness — proves what's forecastable (see `backtest/README.md`) |
+| `datasource.js` | Coinbase OHLCV fetch (granularity-aware: 1h, 1d, …) |
+| `news.js` | CryptoPanic headlines (optional) |
+| `config.json` | coins, triggers, forecast/trader/pattern settings — no secrets |
+| `state.json` / `forecast-state.json` | rolling history / storm cooldowns, committed by CI |
+| `public/data.json`, `index.html` | dashboard feed + static PWA |
+| `prompts/analysis.md` | system prompt for the AI analysis |
+| `.github/workflows/` | `watch.yml` (hourly), `forecast.yml` (hourly), `trader.yml` (daily) |
+```

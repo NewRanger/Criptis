@@ -20,6 +20,31 @@ import { fetchHistory, saveCache, loadCache } from "./history.js";
 import { replay, signalsPredictor } from "./replay.js";
 import { calibrate, evaluateOnTest, calibratedProbability } from "./calibrate.js";
 import { evaluateSignal } from "../signals.js";
+import { rsi, bollinger } from "../indicators.js";
+
+const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const r3 = (x) => (Number.isFinite(x) ? Math.round(x * 1000) / 1000 : x);
+
+// Alternative hypothesis: mean-reversion at EXTREMES (matches "it's at its low, little
+// chance it goes lower"). Only makes a call when RSI/%B are stretched — oversold -> up,
+// overbought -> down — so it's rare but high-conviction. Confidence scales with how
+// extreme the reading is. Returns dir:0 (no call) in the normal middle.
+function meanRevPredictor(sub) {
+  const closes = sub.closes;
+  const r = rsi(closes, 14);
+  const bb = bollinger(closes, 20, 2);
+  if (r == null || !bb) return { dir: 0 };
+  const pctB = bb.pctB;
+  if (r <= 35 || pctB <= 0.05) {
+    const conf = clamp01(Math.max((35 - r) / 35, (0.05 - pctB) / 0.5));
+    return { dir: +1, confidence: r3(0.5 + 0.5 * conf), meta: { verdict: "BUY", regime: "oversold" } };
+  }
+  if (r >= 65 || pctB >= 0.95) {
+    const conf = clamp01(Math.max((r - 65) / 35, (pctB - 0.95) / 0.5));
+    return { dir: -1, confidence: r3(0.5 + 0.5 * conf), meta: { verdict: "SELL", regime: "overbought" } };
+  }
+  return { dir: 0 };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "..", "config.json");
@@ -43,10 +68,13 @@ const params = {
   kAtr: num("katr", 1.5),                 // target/stop distance in ATR units
   window: num("window", 300),             // rolling lookback handed to the model
   warmup: num("warmup", 60),              // signals.js needs >= 60 bars
+  step: num("step", 1),                   // evaluate every Nth bar (cost control on long runs)
   split: num("split", 0.7),               // train fraction (rest is held-out test)
   buckets: num("buckets", 10),
+  predictor: opt("predictor", "signals"), // "signals" (trend-following) | "meanrev" (extremes)
   doFetch: flag("fetch"),
 };
+const predictFn = params.predictor === "meanrev" ? meanRevPredictor : signalsPredictor(evaluateSignal);
 
 const pct = (x) => (x == null ? "  —  " : `${(x * 100).toFixed(1)}%`.padStart(6));
 
@@ -65,8 +93,8 @@ async function main() {
       history = await fetchHistory(coin, { granularity: params.granularity, totalCandles: params.candles });
       saveCache(history);
     }
-    const records = replay(history, signalsPredictor(evaluateSignal), {
-      horizon: params.horizon, kAtr: params.kAtr, sliceWindow: params.window, warmup: params.warmup,
+    const records = replay(history, predictFn, {
+      horizon: params.horizon, kAtr: params.kAtr, sliceWindow: params.window, warmup: params.warmup, step: params.step,
     });
     for (const r of records) r.meta = { ...r.meta, coin };
     const c = calibrate(records);

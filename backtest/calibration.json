@@ -1,103 +1,109 @@
 {
-  "generatedAt": "2026-06-17T08:07:50.176Z",
+  "generatedAt": "2026-06-17T08:46:10.532Z",
   "params": {
     "granularity": 3600,
-    "candles": 1800,
+    "candles": 8760,
     "horizon": 24,
     "kAtr": 1.5,
     "window": 300,
     "warmup": 60,
+    "step": 1,
     "split": 0.7,
     "buckets": 10,
-    "doFetch": true
+    "predictor": "signals",
+    "doFetch": false
   },
   "coins": [
-    "bitcoin"
+    "bitcoin",
+    "ethereum",
+    "solana",
+    "ripple",
+    "dogecoin"
   ],
   "samples": {
-    "total": 1724,
-    "train": 1206,
-    "test": 518
+    "total": 21206,
+    "train": 14844,
+    "test": 6362
   },
   "train": {
     "overall": {
-      "n": 1206,
-      "hit": 577,
-      "miss": 591,
-      "flat": 38,
-      "hitRate": 0.478,
-      "decisiveHitRate": 0.494
+      "n": 14844,
+      "hit": 6976,
+      "miss": 7199,
+      "flat": 669,
+      "hitRate": 0.47,
+      "decisiveHitRate": 0.492
     },
     "byConfidence": [
       {
         "lo": 0,
         "hi": 0.1,
-        "n": 79,
-        "hit": 45,
-        "miss": 30,
-        "flat": 4,
-        "hitRate": 0.57,
-        "decisiveHitRate": 0.6
+        "n": 915,
+        "hit": 454,
+        "miss": 415,
+        "flat": 46,
+        "hitRate": 0.496,
+        "decisiveHitRate": 0.522
       },
       {
         "lo": 0.1,
         "hi": 0.2,
-        "n": 277,
-        "hit": 142,
-        "miss": 132,
-        "flat": 3,
-        "hitRate": 0.513,
-        "decisiveHitRate": 0.518
+        "n": 3632,
+        "hit": 1672,
+        "miss": 1805,
+        "flat": 155,
+        "hitRate": 0.46,
+        "decisiveHitRate": 0.481
       },
       {
         "lo": 0.2,
         "hi": 0.3,
-        "n": 229,
-        "hit": 98,
-        "miss": 123,
-        "flat": 8,
-        "hitRate": 0.428,
-        "decisiveHitRate": 0.443
+        "n": 2767,
+        "hit": 1279,
+        "miss": 1368,
+        "flat": 120,
+        "hitRate": 0.462,
+        "decisiveHitRate": 0.483
       },
       {
         "lo": 0.3,
         "hi": 0.4,
-        "n": 249,
-        "hit": 119,
-        "miss": 126,
-        "flat": 4,
-        "hitRate": 0.478,
-        "decisiveHitRate": 0.486
+        "n": 2965,
+        "hit": 1433,
+        "miss": 1401,
+        "flat": 131,
+        "hitRate": 0.483,
+        "decisiveHitRate": 0.506
       },
       {
         "lo": 0.4,
         "hi": 0.5,
-        "n": 284,
-        "hit": 137,
-        "miss": 134,
-        "flat": 13,
-        "hitRate": 0.482,
-        "decisiveHitRate": 0.506
+        "n": 3826,
+        "hit": 1806,
+        "miss": 1840,
+        "flat": 180,
+        "hitRate": 0.472,
+        "decisiveHitRate": 0.495
       },
       {
         "lo": 0.5,
         "hi": 0.6,
-        "n": 81,
-        "hit": 30,
-        "miss": 45,
-        "flat": 6,
-        "hitRate": 0.37,
-        "decisiveHitRate": 0.4
+        "n": 700,
+        "hit": 313,
+        "miss": 353,
+        "flat": 34,
+        "hitRate": 0.447,
+        "decisiveHitRate": 0.47
       },
       {
         "lo": 0.6,
         "hi": 0.7,
-        "n": 7,
-        "hit": 6,
-        "miss": 1,
-        "flat": 0,
-        "hitRate": 0.857,
-        "decisiveHitRate": 0.857
+        "n": 39,
+        "hit": 19,
+        "miss": 17,
+        "flat": 3,
+        "hitRate": 0.487,
+        "decisiveHitRate": 0.528
       },
       {
         "lo": 0.7,
@@ -132,62 +138,62 @@
     ],
     "byRegime": {
       "bull": {
-        "n": 639,
-        "hit": 304,
-        "miss": 320,
-        "flat": 15,
-        "hitRate": 0.476,
-        "decisiveHitRate": 0.487
-      },
-      "range": {
-        "n": 161,
-        "hit": 67,
-        "miss": 88,
-        "flat": 6,
-        "hitRate": 0.416,
-        "decisiveHitRate": 0.432
+        "n": 5576,
+        "hit": 2607,
+        "miss": 2835,
+        "flat": 134,
+        "hitRate": 0.468,
+        "decisiveHitRate": 0.479
       },
       "bear": {
-        "n": 406,
-        "hit": 206,
-        "miss": 183,
-        "flat": 17,
-        "hitRate": 0.507,
-        "decisiveHitRate": 0.53
+        "n": 7213,
+        "hit": 3418,
+        "miss": 3382,
+        "flat": 413,
+        "hitRate": 0.474,
+        "decisiveHitRate": 0.503
+      },
+      "range": {
+        "n": 2055,
+        "hit": 951,
+        "miss": 982,
+        "flat": 122,
+        "hitRate": 0.463,
+        "decisiveHitRate": 0.492
       }
     },
     "byVerdict": {
       "NEUTRAL": {
-        "n": 1154,
-        "hit": 555,
-        "miss": 564,
-        "flat": 35,
-        "hitRate": 0.481,
-        "decisiveHitRate": 0.496
+        "n": 14403,
+        "hit": 6792,
+        "miss": 6971,
+        "flat": 640,
+        "hitRate": 0.472,
+        "decisiveHitRate": 0.493
       },
       "BUY": {
-        "n": 22,
-        "hit": 14,
-        "miss": 5,
-        "flat": 3,
-        "hitRate": 0.636,
-        "decisiveHitRate": 0.737
+        "n": 154,
+        "hit": 69,
+        "miss": 70,
+        "flat": 15,
+        "hitRate": 0.448,
+        "decisiveHitRate": 0.496
       },
       "WATCH": {
-        "n": 8,
-        "hit": 1,
-        "miss": 7,
-        "flat": 0,
-        "hitRate": 0.125,
-        "decisiveHitRate": 0.125
+        "n": 120,
+        "hit": 41,
+        "miss": 73,
+        "flat": 6,
+        "hitRate": 0.342,
+        "decisiveHitRate": 0.36
       },
       "SELL": {
-        "n": 22,
-        "hit": 7,
-        "miss": 15,
-        "flat": 0,
-        "hitRate": 0.318,
-        "decisiveHitRate": 0.318
+        "n": 167,
+        "hit": 74,
+        "miss": 85,
+        "flat": 8,
+        "hitRate": 0.443,
+        "decisiveHitRate": 0.465
       }
     }
   },
@@ -196,58 +202,58 @@
       {
         "lo": 0,
         "hi": 0.1,
-        "promised": 0.6,
-        "actual": 0.833,
-        "n": 36,
-        "decisive": 36
+        "promised": 0.522,
+        "actual": 0.578,
+        "n": 415,
+        "decisive": 393
       },
       {
         "lo": 0.1,
         "hi": 0.2,
-        "promised": 0.518,
-        "actual": 0.551,
-        "n": 105,
-        "decisive": 98
+        "promised": 0.481,
+        "actual": 0.507,
+        "n": 1473,
+        "decisive": 1425
       },
       {
         "lo": 0.2,
         "hi": 0.3,
-        "promised": 0.443,
-        "actual": 0.642,
-        "n": 111,
-        "decisive": 106
+        "promised": 0.483,
+        "actual": 0.493,
+        "n": 1265,
+        "decisive": 1230
       },
       {
         "lo": 0.3,
         "hi": 0.4,
-        "promised": 0.486,
-        "actual": 0.538,
-        "n": 95,
-        "decisive": 91
+        "promised": 0.506,
+        "actual": 0.453,
+        "n": 1259,
+        "decisive": 1217
       },
       {
         "lo": 0.4,
         "hi": 0.5,
-        "promised": 0.506,
-        "actual": 0.474,
-        "n": 142,
-        "decisive": 137
+        "promised": 0.495,
+        "actual": 0.472,
+        "n": 1594,
+        "decisive": 1544
       },
       {
         "lo": 0.5,
         "hi": 0.6,
-        "promised": 0.4,
-        "actual": 0.381,
-        "n": 25,
-        "decisive": 21
+        "promised": 0.47,
+        "actual": 0.396,
+        "n": 323,
+        "decisive": 313
       },
       {
         "lo": 0.6,
         "hi": 0.7,
-        "promised": 0.857,
-        "actual": 1,
-        "n": 4,
-        "decisive": 4
+        "promised": 0.528,
+        "actual": 0.394,
+        "n": 33,
+        "decisive": 33
       },
       {
         "lo": 0.7,
@@ -274,15 +280,15 @@
         "decisive": 0
       }
     ],
-    "meanAbsError": 0.102,
-    "weightedAbsError": 0.087,
+    "meanAbsError": 0.054,
+    "weightedAbsError": 0.032,
     "overall": {
-      "n": 518,
-      "hit": 278,
-      "miss": 215,
-      "flat": 25,
-      "hitRate": 0.537,
-      "decisiveHitRate": 0.564
+      "n": 6362,
+      "hit": 2973,
+      "miss": 3182,
+      "flat": 207,
+      "hitRate": 0.467,
+      "decisiveHitRate": 0.483
     }
   }
 }
