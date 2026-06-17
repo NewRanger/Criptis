@@ -109,9 +109,10 @@ while a swing-structure pattern means a **new detector file**.
    / `"neutral"`, which selects `ZONE_COPY`), and a one-sentence Georgian `trend`
    description. Write the Georgian per the project's translation rules — standard
    trading terminology (`მხარდაჭერა` / `წინააღმდეგობა`), modern literary Georgian,
-   no calques/barbarisms, concise; descriptive only, never advisory, no buy/sell
-   language. Without an entry it silently falls back to `PATTERN_FALLBACK` (generic
-   copy), which is a regression in user experience.
+   formal `თქვენ`, no calques/barbarisms, concise. The `trend`/zone copy *describes*
+   the figure; the advisory **recommendation + risk note** are added by the email
+   layer (`RECO_COPY` / `RISK_NOTE` in `watcher.js`). Without a `PATTERN_COPY` entry it
+   silently falls back to `PATTERN_FALLBACK` (generic copy), a UX regression.
 
 7. **Update the docs** — extend the catalogue table / Scope section in
    [patterns/README.md](../../../patterns/README.md) so the doc still matches the

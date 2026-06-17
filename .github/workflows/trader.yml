@@ -1,0 +1,36 @@
+name: Criptis daily signals
+
+on:
+  schedule:
+    # Once a day, shortly after the 00:00 UTC daily candle close. Off the top of
+    # the hour — GitHub delays/skips runs scheduled exactly at :00 under load.
+    - cron: "20 0 * * *"
+  workflow_dispatch:
+
+# Read-only: the daily trader job is stateless (no state.json to commit).
+permissions:
+  contents: read
+
+concurrency:
+  group: criptis-trader
+  cancel-in-progress: false
+
+jobs:
+  trader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run daily trade-signal job
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Alert recipients (comma-separated) — kept out of the committed config.
+          ALERT_RECIPIENTS: ${{ secrets.ALERT_RECIPIENTS }}
+          # Prices come from Coinbase (no key). signals.js is deterministic — no LLM,
+          # so no ANTHROPIC_API_KEY is needed here.
+        run: node trader.js

@@ -9,6 +9,10 @@
   },
   "scripts": {
     "watch": "node watcher.js",
-    "dry-run": "node watcher.js --dry-run"
+    "dry-run": "node watcher.js --dry-run",
+    "trader": "node trader.js",
+    "trader:dry": "node trader.js --dry-run",
+    "backtest": "node backtest/run.mjs",
+    "test": "node --test"
   }
 }

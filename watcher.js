@@ -212,6 +212,12 @@ const ANALYSIS_TOOL = {
         enum: ["Bullish", "Bearish", "Neutral"],
         description: "Directional read implied by the evidence.",
       },
+      action: {
+        type: "string",
+        enum: ["Buy", "Sell", "Hold", "Avoid", "Wait"],
+        description:
+          "The single recommended action for a beginner, given the evidence AND the risk: Buy/Sell to act with a confirmed move, Hold to keep an existing position, Avoid/Wait when the setup is unclear, stretched, or too risky. Be conservative — prefer Wait/Avoid over a low-conviction Buy/Sell.",
+      },
       invalidationLevel: {
         type: "number",
         description: "Exact USD price at which this read is proven wrong (the setup fails). Derived from the candles, not invented.",
@@ -222,7 +228,7 @@ const ANALYSIS_TOOL = {
           "Beginner-friendly Georgian analysis as an HTML string: EXACTLY three <br>•-prefixed bullets with <strong> labels, per the system prompt. Only <br> and <strong> tags.",
       },
     },
-    required: ["patternFound", "patternName", "bias", "invalidationLevel", "georgianSummary"],
+    required: ["patternFound", "patternName", "bias", "action", "invalidationLevel", "georgianSummary"],
   },
 };
 
@@ -318,6 +324,7 @@ async function analyze(coinData, news = []) {
       patternFound: Boolean(out.patternFound),
       patternName: typeof out.patternName === "string" ? out.patternName : "",
       bias: ["Bullish", "Bearish", "Neutral"].includes(out.bias) ? out.bias : "Neutral",
+      action: ["Buy", "Sell", "Hold", "Avoid", "Wait"].includes(out.action) ? out.action : "Wait",
       invalidationLevel: Number.isFinite(out.invalidationLevel) ? out.invalidationLevel : null,
       georgianSummary: out.georgianSummary.trim(),
     };
@@ -434,6 +441,16 @@ const BIAS = {
 };
 const biasStyle = (bias) => BIAS[bias] ?? BIAS.Neutral;
 
+// Recommended action (from the LLM analysis) -> Georgian label. The app ADVISES but
+// never executes — these are recommendations the reader acts on, paired with RISK_NOTE.
+const ACTION = {
+  Buy:   "ყიდვა",
+  Sell:  "გაყიდვა",
+  Hold:  "პოზიციის დაკავება",
+  Avoid: "თავის შეკავება",
+  Wait:  "მოცდა",
+};
+
 // georgianSummary comes back as an HTML string (only <br> and <strong>). For the
 // plain-text body, turn <br> into newlines and drop the <strong> tags.
 export const summaryToText = (s) =>
@@ -448,7 +465,8 @@ export const summaryToText = (s) =>
 // otherwise (passed but the AI call failed/unset) the temporary-unavailable line.
 function bodyAnalysis(a) {
   if (a.analysis) {
-    return `ანალიზი — ტენდენცია: ${biasStyle(a.analysis.bias).label}\n${summaryToText(a.analysis.georgianSummary)}`;
+    const act = ACTION[a.analysis.action] ?? "მოცდა";
+    return `ანალიზი — ტენდენცია: ${biasStyle(a.analysis.bias).label} · რეკომენდაცია: ${act}\n${summaryToText(a.analysis.georgianSummary)}`;
   }
   if (a.prefilter && !a.prefilter.pass) return STRUCTURAL_NOTE;
   return "ანალიზი დროებით მიუწვდომელია (AI-ს გამოძახება ვერ შესრულდა) — იხ. ციფრები ზემოთ.";
@@ -500,6 +518,22 @@ const ZONE_COPY = {
   },
 };
 
+// Advisory recommendation per direction — the "what to consider doing", formal თქვენ.
+// This is advice, not a guarantee; it is always shown alongside RISK_NOTE, and the app
+// never executes anything itself. Standard trading terms (stop-loss kept in English).
+const RECO_COPY = {
+  bull: "რეკომენდაცია — ზრდის სცენარი: ყიდვა განიხილეთ მხარდაჭერასთან ახლოს, სტოპ-ლოსით (stop-loss) მის ოდნავ ქვემოთ, მიზანი წინააღმდეგობისკენ.",
+  bear: "რეკომენდაცია — კლების სცენარი: მოგების დაფიქსირება ან გაყიდვა განიხილეთ; ახალ შესვლას მოერიდეთ, სანამ წინააღმდეგობა არ გატყდება.",
+  neutral: "რეკომენდაცია — მოცდა: მიმართულება ჯერ გაურკვეველია; იმოქმედეთ მხოლოდ მკაფიო გარღვევის დადასტურების შემდეგ.",
+};
+
+// One global risk note appended to every email — formal თქვენ. Replaces the old
+// "ეს არ არის ფინანსური რჩევა": the app now advises, so it frames risk instead of
+// disclaiming advice.
+export const RISK_NOTE =
+  "⚠️ მაღალი რისკი: კრიპტოვალუტა არასტაბილურია. ეს ალგორითმული შეფასებაა, არა გარანტია — " +
+  "საბოლოო გადაწყვეტილებას თავად იღებთ და პასუხისმგებლობაც თქვენია (DYOR).";
+
 // Is the pattern clear or weak — without promising anything.
 function confidenceNote(c) {
   if (c >= 0.85) return "სურათი ძალიან მკაფიოა.";
@@ -513,6 +547,7 @@ function patternCopy(pa) {
   const z = ZONE_COPY[m.dir];
   return {
     head: `${m.ka} (${pa.patternName}) — ${m.trend}`,
+    reco: RECO_COPY[m.dir] ?? RECO_COPY.neutral,
     lower: z.lower,
     upper: z.upper,
     invalidation: z.invalidation,
@@ -527,6 +562,7 @@ function patternBlockText(pa) {
   const c = patternCopy(pa);
   return [
     `📊 ${c.head}`,
+    `👉 ${c.reco}`,
     `მხარდაჭერა: ${fmtPrice(pa.supportLevel)} — ${c.lower}`,
     `წინააღმდეგობა: ${fmtPrice(pa.resistanceLevel)} — ${c.upper}`,
     `სცენარის გაუქმება: ${fmtPrice(pa.invalidationLevel)} — ${c.invalidation}`,
@@ -559,7 +595,7 @@ export function buildBody(alerts) {
       tail.join("\n\n"),
     ].join("\n");
   });
-  return `${sections.join("\n\n")}\n\n— Criptis`;
+  return `${sections.join("\n\n")}\n\n${RISK_NOTE}\n— Criptis`;
 }
 
 const esc = (s) =>
@@ -645,6 +681,15 @@ function biasPill(bias) {
   return `<span style="display:inline-block;background:${bg};color:${fg};font-weight:600;font-size:12px;padding:3px 10px;border-radius:6px;">ტენდენცია: ${esc(label)}</span>`;
 }
 
+// Recommended-action pill: green Buy, red Sell/Avoid, grey Hold/Wait. Advice the
+// reader acts on — never executed by the app.
+function actionPill(action) {
+  const label = ACTION[action] ?? "მოცდა";
+  const bg = action === "Buy" ? "#0ecb81" : action === "Sell" || action === "Avoid" ? "#f6465d" : "#2b3139";
+  const fg = action === "Hold" || action === "Wait" ? "#d6dae0" : "#fff";
+  return `<span style="display:inline-block;background:${bg};color:${fg};font-weight:700;font-size:12px;padding:3px 10px;border-radius:6px;margin-left:6px;">რეკომენდაცია: ${esc(label)}</span>`;
+}
+
 // Per-card analysis block (HTML): the AI analysis (bias pill + the model's
 // georgianSummary, yellow-accented) if the coin passed the pre-filter and the call
 // succeeded; a muted structural note if it didn't qualify; otherwise the
@@ -654,7 +699,7 @@ function htmlAnalysis(a) {
     const t = a.analysis;
     return `
         <div style="background:#0b0e11;border-left:3px solid #f0b90b;border-radius:8px;padding:14px 16px;margin:0 0 14px;">
-          <div style="margin-bottom:10px;">${biasPill(t.bias)}</div>
+          <div style="margin-bottom:10px;">${biasPill(t.bias)}${actionPill(t.action)}</div>
           <div style="color:#d6dae0;font-size:14px;line-height:1.7;">${summaryHtml(t.georgianSummary)}</div>
         </div>`;
   }
@@ -675,6 +720,7 @@ function patternHtml(pa) {
   return `
         <div style="background:#0b0e11;border-left:3px solid #3b82f6;border-radius:8px;padding:14px 16px;margin:0 0 14px;">
           <div style="color:#d6dae0;font-size:14px;line-height:1.6;margin-bottom:10px;">📊 ${esc(c.head)}</div>
+          <div style="color:#eaecef;font-size:13px;font-weight:600;background:#161a1e;border-radius:6px;padding:9px 11px;margin:0 0 10px;">👉 ${esc(c.reco)}</div>
           <div style="color:#b7bdc6;font-size:13px;line-height:1.6;">
             ${line("მხარდაჭერა", fmtPrice(pa.supportLevel), c.lower)}
             ${line("წინააღმდეგობა", fmtPrice(pa.resistanceLevel), c.upper)}
@@ -709,7 +755,7 @@ export function buildHtml(alerts) {
     <div style="max-width:600px;margin:0 auto;">
       <div style="color:#f0b90b;font-size:18px;font-weight:700;margin-bottom:16px;">⚡ Criptis შეტყობინება</div>
       ${cards.join("")}
-      <div style="color:#5e6673;font-size:11px;margin-top:16px;">Criptis · ავტომატური ფასის მეთვალყურე · ეს არ არის ფინანსური რჩევა</div>
+      <div style="color:#9aa3ad;font-size:11px;margin-top:16px;line-height:1.5;">${esc(RISK_NOTE)}<br>Criptis · კოინ-ტრეიდერ ასისტენტი</div>
     </div>
   </body></html>`;
 }

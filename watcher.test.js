@@ -266,42 +266,42 @@ test("existing price-trigger alert still renders its reason and NO pattern block
   const body = buildBody([priceAlert()]);
   assert.match(body, /BITCOIN/);
   assert.match(body, /მიზეზი:/);
-  assert.doesNotMatch(body, /ქვედა ზონა/, "no pattern block when there is no pattern");
+  assert.doesNotMatch(body, /მხარდაჭერა/, "no pattern block when there is no pattern");
 });
 
 test("a coin with BOTH a price trigger and a pattern renders ONE combined card", () => {
   const body = buildBody([priceAlert({ patternAlert: PA })]);
   assert.equal((body.match(/BITCOIN —/g) || []).length, 1, "one card, not two");
   assert.match(body, /მიზეზი:.*ბოლო შემოწმების/, "keeps the price-trigger reason");
-  assert.match(body, /ქვედა ზონა/, "and adds the pattern observation");
+  assert.match(body, /მხარდაჭერა/, "and adds the pattern observation");
   assert.match(body, /Channel Up/);
 });
 
 test("a pattern-only alert renders the educational block and NOT the 'analysis unavailable' line", () => {
   const body = buildBody([priceAlert({ reasons: [], patternAlert: PA })]);
-  assert.match(body, /ქვედა ზონა/);
+  assert.match(body, /მხარდაჭერა/);
   assert.doesNotMatch(body, /ანალიზი დროებით მიუწვდომელია/, "pattern-only cards skip the AI note");
   assert.match(body, /chart pattern observed/, "reason line marks the pattern observation");
 });
 
-test("pattern email uses the beginner-friendly zone style and NO buy/sell language", () => {
+test("pattern email uses standard trading terms AND gives an advisory recommendation", () => {
   const body = buildBody([priceAlert({ reasons: [], patternAlert: PA })]);
-  // beginner-friendly zones with plain explanations, not dry support/resistance labels
-  assert.match(body, /ქვედა ზონა: .* — /, "lower zone with a plain-language explanation");
-  assert.match(body, /ზედა ზონა: .* — /, "upper zone with a plain-language explanation");
-  assert.match(body, /ფიგურის სანდოობა: \d+% — /);
-  assert.doesNotMatch(body, /მხარდაჭერა|წინააღმდეგობა/, "no dry support/resistance labels");
-  // the buy/sell disclaimer is gone, and there is NO buy/sell language at all
-  assert.doesNotMatch(body, /Not a buy\/sell instruction/);
-  assert.doesNotMatch(body, /ყიდვა|გაყიდვ/, "no Georgian buy/sell wording");
-  assert.doesNotMatch(body, /\b(buy|sell|long|short|target|leverage)\b/i, "no English buy/sell wording");
+  // standard trading terminology, each level followed by a plain-language note
+  assert.match(body, /მხარდაჭერა: .* — /, "support level with a plain-language note");
+  assert.match(body, /წინააღმდეგობა: .* — /, "resistance level with a plain-language note");
+  assert.match(body, /სანდოობა: \d+% — /);
+  // it is an advisory trader assistant now: a clear recommendation + a risk note
+  assert.match(body, /👉 რეკომენდაცია/, "gives an actionable recommendation");
+  assert.match(body, /ყიდვა|გაყიდვა|მოცდა/, "recommendation uses plain Georgian action wording");
+  assert.match(body, /მაღალი რისკი/, "appends the risk note");
 });
 
-test("the HTML email also combines into one card with zone copy and no disclaimer", () => {
+test("the HTML email combines into one card with the pattern block, recommendation and risk note", () => {
   const html = buildHtml([priceAlert({ patternAlert: PA })]);
   assert.equal((html.match(/BITCOIN/g) || []).length, 1, "one card");
-  assert.match(html, /ქვედა ზონა/);
-  assert.doesNotMatch(html, /Not a buy\/sell instruction/);
+  assert.match(html, /მხარდაჭერა/);
+  assert.match(html, /რეკომენდაცია/, "advisory recommendation present");
+  assert.match(html, /მაღალი რისკი/, "risk note present");
 });
 
 // --- email SUBJECT: pattern-only vs price-style -------------------------------

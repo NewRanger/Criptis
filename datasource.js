@@ -21,6 +21,11 @@
 
 const COINBASE = "https://api.exchange.coinbase.com";
 
+// Coinbase Exchange only supports these candle granularities (seconds). NB: there is
+// no native 4h (14400) — resample from 1h if ever needed. 1h = 3600 (hourly watcher),
+// 1d = 86400 (daily trader signals).
+export const COINBASE_GRANULARITIES = new Set([60, 300, 900, 3600, 21600, 86400]);
+
 // CoinGecko id -> Coinbase USD product. Extend as coins are added to config.json.
 export const COINBASE_PRODUCTS = {
   bitcoin: "BTC-USD",
@@ -53,7 +58,7 @@ export function productFor(coinId, override) {
 // close — so one bad candle can never reach the indicators or be read as a price.
 // Timestamps are converted to ms (the rest of the app works in ms). A non-finite
 // volume becomes null (kept, never coerced to 0). Keeps the most recent `hours`.
-export function parseCandles(rows, { hours = 48 } = {}) {
+export function parseCandles(rows, { hours = 48, limit } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const candles = [];
   for (const row of list) {
@@ -70,7 +75,8 @@ export function parseCandles(rows, { hours = 48 } = {}) {
     });
   }
   candles.sort((a, b) => a.t - b.t); // oldest-first, so closes.at(-1) is the latest
-  const kept = hours > 0 ? candles.slice(-hours) : candles;
+  const keep = Number.isFinite(limit) ? limit : hours; // candles to keep (back-compat: `hours`)
+  const kept = keep > 0 ? candles.slice(-keep) : candles;
   return {
     times: kept.map((c) => c.t),
     opens: kept.map((c) => c.o),
@@ -89,10 +95,16 @@ export function parseCandles(rows, { hours = 48 } = {}) {
 // last } where last is the most recent close.
 export async function fetchSeries(
   coinId,
-  { hours = 48, timeoutMs = 15000, product, minPoints = 1, retries = 1 } = {},
+  { hours = 48, granularity = 3600, limit, timeoutMs = 15000, product, minPoints = 1, retries = 1 } = {},
 ) {
   const pair = productFor(coinId, product);
-  const url = `${COINBASE}/products/${encodeURIComponent(pair)}/candles?granularity=3600`;
+  if (!COINBASE_GRANULARITIES.has(granularity)) {
+    throw new Error(
+      `unsupported Coinbase granularity ${granularity}s — use one of ${[...COINBASE_GRANULARITIES].join(", ")} (no native 4h)`,
+    );
+  }
+  const keep = Number.isFinite(limit) ? limit : hours; // candles to keep (back-compat: `hours`)
+  const url = `${COINBASE}/products/${encodeURIComponent(pair)}/candles?granularity=${granularity}`;
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -102,9 +114,9 @@ export async function fetchSeries(
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       const rows = await res.json();
-      const series = parseCandles(rows, { hours });
+      const series = parseCandles(rows, { limit: keep });
       if (series.closes.length < minPoints) {
-        throw new Error(`only ${series.closes.length} valid hourly candle(s) (need ${minPoints})`);
+        throw new Error(`only ${series.closes.length} valid candle(s) at granularity ${granularity}s (need ${minPoints})`);
       }
       return { coinId, product: pair, last: series.closes.at(-1), ...series };
     } catch (err) {

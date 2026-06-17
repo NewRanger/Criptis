@@ -1,0 +1,288 @@
+{
+  "generatedAt": "2026-06-17T08:07:50.176Z",
+  "params": {
+    "granularity": 3600,
+    "candles": 1800,
+    "horizon": 24,
+    "kAtr": 1.5,
+    "window": 300,
+    "warmup": 60,
+    "split": 0.7,
+    "buckets": 10,
+    "doFetch": true
+  },
+  "coins": [
+    "bitcoin"
+  ],
+  "samples": {
+    "total": 1724,
+    "train": 1206,
+    "test": 518
+  },
+  "train": {
+    "overall": {
+      "n": 1206,
+      "hit": 577,
+      "miss": 591,
+      "flat": 38,
+      "hitRate": 0.478,
+      "decisiveHitRate": 0.494
+    },
+    "byConfidence": [
+      {
+        "lo": 0,
+        "hi": 0.1,
+        "n": 79,
+        "hit": 45,
+        "miss": 30,
+        "flat": 4,
+        "hitRate": 0.57,
+        "decisiveHitRate": 0.6
+      },
+      {
+        "lo": 0.1,
+        "hi": 0.2,
+        "n": 277,
+        "hit": 142,
+        "miss": 132,
+        "flat": 3,
+        "hitRate": 0.513,
+        "decisiveHitRate": 0.518
+      },
+      {
+        "lo": 0.2,
+        "hi": 0.3,
+        "n": 229,
+        "hit": 98,
+        "miss": 123,
+        "flat": 8,
+        "hitRate": 0.428,
+        "decisiveHitRate": 0.443
+      },
+      {
+        "lo": 0.3,
+        "hi": 0.4,
+        "n": 249,
+        "hit": 119,
+        "miss": 126,
+        "flat": 4,
+        "hitRate": 0.478,
+        "decisiveHitRate": 0.486
+      },
+      {
+        "lo": 0.4,
+        "hi": 0.5,
+        "n": 284,
+        "hit": 137,
+        "miss": 134,
+        "flat": 13,
+        "hitRate": 0.482,
+        "decisiveHitRate": 0.506
+      },
+      {
+        "lo": 0.5,
+        "hi": 0.6,
+        "n": 81,
+        "hit": 30,
+        "miss": 45,
+        "flat": 6,
+        "hitRate": 0.37,
+        "decisiveHitRate": 0.4
+      },
+      {
+        "lo": 0.6,
+        "hi": 0.7,
+        "n": 7,
+        "hit": 6,
+        "miss": 1,
+        "flat": 0,
+        "hitRate": 0.857,
+        "decisiveHitRate": 0.857
+      },
+      {
+        "lo": 0.7,
+        "hi": 0.8,
+        "n": 0,
+        "hit": 0,
+        "miss": 0,
+        "flat": 0,
+        "hitRate": null,
+        "decisiveHitRate": null
+      },
+      {
+        "lo": 0.8,
+        "hi": 0.9,
+        "n": 0,
+        "hit": 0,
+        "miss": 0,
+        "flat": 0,
+        "hitRate": null,
+        "decisiveHitRate": null
+      },
+      {
+        "lo": 0.9,
+        "hi": 1,
+        "n": 0,
+        "hit": 0,
+        "miss": 0,
+        "flat": 0,
+        "hitRate": null,
+        "decisiveHitRate": null
+      }
+    ],
+    "byRegime": {
+      "bull": {
+        "n": 639,
+        "hit": 304,
+        "miss": 320,
+        "flat": 15,
+        "hitRate": 0.476,
+        "decisiveHitRate": 0.487
+      },
+      "range": {
+        "n": 161,
+        "hit": 67,
+        "miss": 88,
+        "flat": 6,
+        "hitRate": 0.416,
+        "decisiveHitRate": 0.432
+      },
+      "bear": {
+        "n": 406,
+        "hit": 206,
+        "miss": 183,
+        "flat": 17,
+        "hitRate": 0.507,
+        "decisiveHitRate": 0.53
+      }
+    },
+    "byVerdict": {
+      "NEUTRAL": {
+        "n": 1154,
+        "hit": 555,
+        "miss": 564,
+        "flat": 35,
+        "hitRate": 0.481,
+        "decisiveHitRate": 0.496
+      },
+      "BUY": {
+        "n": 22,
+        "hit": 14,
+        "miss": 5,
+        "flat": 3,
+        "hitRate": 0.636,
+        "decisiveHitRate": 0.737
+      },
+      "WATCH": {
+        "n": 8,
+        "hit": 1,
+        "miss": 7,
+        "flat": 0,
+        "hitRate": 0.125,
+        "decisiveHitRate": 0.125
+      },
+      "SELL": {
+        "n": 22,
+        "hit": 7,
+        "miss": 15,
+        "flat": 0,
+        "hitRate": 0.318,
+        "decisiveHitRate": 0.318
+      }
+    }
+  },
+  "test": {
+    "rows": [
+      {
+        "lo": 0,
+        "hi": 0.1,
+        "promised": 0.6,
+        "actual": 0.833,
+        "n": 36,
+        "decisive": 36
+      },
+      {
+        "lo": 0.1,
+        "hi": 0.2,
+        "promised": 0.518,
+        "actual": 0.551,
+        "n": 105,
+        "decisive": 98
+      },
+      {
+        "lo": 0.2,
+        "hi": 0.3,
+        "promised": 0.443,
+        "actual": 0.642,
+        "n": 111,
+        "decisive": 106
+      },
+      {
+        "lo": 0.3,
+        "hi": 0.4,
+        "promised": 0.486,
+        "actual": 0.538,
+        "n": 95,
+        "decisive": 91
+      },
+      {
+        "lo": 0.4,
+        "hi": 0.5,
+        "promised": 0.506,
+        "actual": 0.474,
+        "n": 142,
+        "decisive": 137
+      },
+      {
+        "lo": 0.5,
+        "hi": 0.6,
+        "promised": 0.4,
+        "actual": 0.381,
+        "n": 25,
+        "decisive": 21
+      },
+      {
+        "lo": 0.6,
+        "hi": 0.7,
+        "promised": 0.857,
+        "actual": 1,
+        "n": 4,
+        "decisive": 4
+      },
+      {
+        "lo": 0.7,
+        "hi": 0.8,
+        "promised": null,
+        "actual": null,
+        "n": 0,
+        "decisive": 0
+      },
+      {
+        "lo": 0.8,
+        "hi": 0.9,
+        "promised": null,
+        "actual": null,
+        "n": 0,
+        "decisive": 0
+      },
+      {
+        "lo": 0.9,
+        "hi": 1,
+        "promised": null,
+        "actual": null,
+        "n": 0,
+        "decisive": 0
+      }
+    ],
+    "meanAbsError": 0.102,
+    "weightedAbsError": 0.087,
+    "overall": {
+      "n": 518,
+      "hit": 278,
+      "miss": 215,
+      "flat": 25,
+      "hitRate": 0.537,
+      "decisiveHitRate": 0.564
+    }
+  }
+}
