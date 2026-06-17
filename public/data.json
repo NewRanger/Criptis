@@ -1,48 +1,39 @@
 {
-  "updatedAt": "2026-06-17T08:12:28.325Z",
+  "updatedAt": "2026-06-17T09:58:23.238Z",
   "coins": {
     "bitcoin": {
-      "price": 65311.02,
+      "price": 64788.63,
       "readout": {
-        "price": 65311.02,
-        "direction": "flat",
-        "cleanliness": "choppy",
+        "price": 64788.63,
+        "direction": "down",
+        "cleanliness": "moderate",
         "stretch": "overextended-down",
-        "momentumPctPerStep": -0.035015595288903294,
-        "rsi": 38.08464491573196,
-        "pctB": -0.148994370393001,
-        "emaShort": 65550.10503292801,
-        "emaLong": 65738.58636507837,
-        "r2": 0.24217296725184856,
+        "momentumPctPerStep": -0.1066932481048854,
+        "rsi": 29.673434519563315,
+        "pctB": -0.22389121435528733,
+        "emaShort": 65240.89786431065,
+        "emaLong": 65598.45689435396,
+        "r2": 0.47542042877022817,
         "volume": {
-          "recent": 148.04827636666667,
-          "base": 153.96093117416663,
-          "ratio": 0.9615963948619449,
-          "rising": false
+          "recent": 221.80420102333332,
+          "base": 155.59633411083334,
+          "ratio": 1.4255104549271658,
+          "rising": true
         },
-        "summary": "No clear trend, choppy (R²=0.24), RSI 38, price below lower band, volume easing."
+        "summary": "Downtrend, moderate (R²=0.48), RSI 30, price below lower band, volume rising."
       },
       "patterns": [
         {
           "patternName": "Descending Triangle",
-          "confidence": 0.583,
-          "supportLevel": 65159.695116279116,
-          "resistanceLevel": 65843.82133650676,
-          "bullishBias": 0.117,
-          "bearishBias": 0.583,
-          "invalidationLevel": 65843.82133650676
+          "confidence": 0.5,
+          "supportLevel": 65139.22348837213,
+          "resistanceLevel": 65807.24669351881,
+          "bullishBias": 0.1,
+          "bearishBias": 0.6,
+          "invalidationLevel": 65807.24669351881
         }
       ],
       "series": [
-        {
-          "t": 1781514000000,
-          "o": 65614.81,
-          "h": 65752.33,
-          "l": 65464.2,
-          "c": 65550.46,
-          "v": 231.93992594,
-          "p": 65550.46
-        },
         {
           "t": 1781517600000,
           "o": 65550.45,
@@ -461,45 +452,45 @@
           "t": 1781683200000,
           "o": 65463.42,
           "h": 65505.32,
-          "l": 65311.02,
-          "c": 65311.02,
-          "v": 16.45059627,
-          "p": 65311.02
+          "l": 64773.81,
+          "c": 64861.97,
+          "v": 258.50760523,
+          "p": 64861.97
+        },
+        {
+          "t": 1781686800000,
+          "o": 64861.97,
+          "h": 65017.98,
+          "l": 64782.58,
+          "c": 64788.63,
+          "v": 87.64783941,
+          "p": 64788.63
         }
       ]
     },
     "ethereum": {
-      "price": 1778.66,
+      "price": 1771.4,
       "readout": {
-        "price": 1778.66,
+        "price": 1771.4,
         "direction": "down",
         "cleanliness": "moderate",
         "stretch": "mid-range",
-        "momentumPctPerStep": -0.059594005756363796,
-        "rsi": 46.69547762200513,
-        "pctB": 0.05492696947997507,
-        "emaShort": 1786.2517128348973,
-        "emaLong": 1789.6471285961634,
-        "r2": 0.5802791890769721,
+        "momentumPctPerStep": -0.11803145331825031,
+        "rsi": 43.469849859274056,
+        "pctB": 0.033769087453859606,
+        "emaShort": 1779.0430601104506,
+        "emaLong": 1786.5478597775395,
+        "r2": 0.5820292629690464,
         "volume": {
-          "recent": 1676.3738474800002,
-          "base": 2090.2346161025,
-          "ratio": 0.8020027199653816,
-          "rising": false
+          "recent": 3013.0054931233335,
+          "base": 2385.6338824291665,
+          "ratio": 1.262978999130976,
+          "rising": true
         },
-        "summary": "Downtrend, moderate (R²=0.58), RSI 47, 5% across the band, volume easing."
+        "summary": "Downtrend, moderate (R²=0.58), RSI 43, 3% across the band, volume rising."
       },
       "patterns": [],
       "series": [
-        {
-          "t": 1781514000000,
-          "o": 1719.2,
-          "h": 1725.73,
-          "l": 1710.64,
-          "c": 1717.36,
-          "v": 6133.40674996,
-          "p": 1717.36
-        },
         {
           "t": 1781517600000,
           "o": 1717.34,
@@ -918,55 +909,55 @@
           "t": 1781683200000,
           "o": 1783.35,
           "h": 1784.59,
-          "l": 1778.4,
-          "c": 1778.66,
-          "v": 433.14567193,
-          "p": 1778.66
+          "l": 1758.53,
+          "c": 1764.13,
+          "v": 4369.03870814,
+          "p": 1764.13
+        },
+        {
+          "t": 1781686800000,
+          "o": 1763.96,
+          "h": 1775.9,
+          "l": 1763.63,
+          "c": 1771.4,
+          "v": 1973.80546622,
+          "p": 1771.4
         }
       ]
     },
     "solana": {
-      "price": 72.97,
+      "price": 72.33,
       "readout": {
-        "price": 72.97,
+        "price": 72.33,
         "direction": "down",
         "cleanliness": "moderate",
-        "stretch": "mid-range",
-        "momentumPctPerStep": -0.07120394559220951,
-        "rsi": 43.93709267155122,
-        "pctB": 0.07964406683056117,
-        "emaShort": 73.334064616046,
-        "emaLong": 73.59273691486052,
-        "r2": 0.3732715429195004,
+        "stretch": "overextended-down",
+        "momentumPctPerStep": -0.14624723820739627,
+        "rsi": 38.06656740432056,
+        "pctB": -0.06463015374521458,
+        "emaShort": 72.90637263373964,
+        "emaLong": 73.40051207542548,
+        "r2": 0.4924606400993542,
         "volume": {
-          "recent": 13913.511603326668,
-          "base": 18704.550513420832,
-          "ratio": 0.7438570412768533,
-          "rising": false
+          "recent": 23361.23027713,
+          "base": 19486.225771876667,
+          "ratio": 1.1988586476733682,
+          "rising": true
         },
-        "summary": "Downtrend, moderate (R²=0.37), RSI 44, 8% across the band, volume easing."
+        "summary": "Downtrend, moderate (R²=0.49), RSI 38, price below lower band, volume rising."
       },
       "patterns": [
         {
           "patternName": "Descending Triangle",
-          "confidence": 0.659,
-          "supportLevel": 72.97510075566751,
-          "resistanceLevel": 74.00580645161295,
-          "bullishBias": 0.132,
-          "bearishBias": 0.727,
-          "invalidationLevel": 74.00580645161295
+          "confidence": 0.577,
+          "supportLevel": 72.98992443324937,
+          "resistanceLevel": 73.95050868486352,
+          "bullishBias": 0.115,
+          "bearishBias": 0.662,
+          "invalidationLevel": 73.95050868486352
         }
       ],
       "series": [
-        {
-          "t": 1781514000000,
-          "o": 71.26,
-          "h": 71.43,
-          "l": 70.76,
-          "c": 71.18,
-          "v": 18159.92579426,
-          "p": 71.18
-        },
         {
           "t": 1781517600000,
           "o": 71.18,
@@ -1385,55 +1376,55 @@
           "t": 1781683200000,
           "o": 73.19,
           "h": 73.23,
-          "l": 72.95,
-          "c": 72.97,
-          "v": 3327.23896817,
-          "p": 72.97
+          "l": 72.09,
+          "c": 72.28,
+          "v": 31042.89987464,
+          "p": 72.28
+        },
+        {
+          "t": 1781686800000,
+          "o": 72.27,
+          "h": 72.59,
+          "l": 72.25,
+          "c": 72.33,
+          "v": 15875.1384266,
+          "p": 72.33
         }
       ]
     },
     "ripple": {
-      "price": 1.2049,
+      "price": 1.1956,
       "readout": {
-        "price": 1.2049,
+        "price": 1.1956,
         "direction": "down",
         "cleanliness": "moderate",
         "stretch": "overextended-down",
-        "momentumPctPerStep": -0.08662238596804159,
-        "rsi": 41.594034936713435,
-        "pctB": -0.000049090775363811404,
-        "emaShort": 1.2108508539434082,
-        "emaLong": 1.2169845156319699,
-        "r2": 0.6188771570180985,
+        "momentumPctPerStep": -0.160455208609799,
+        "rsi": 36.065280377424976,
+        "pctB": -0.09542655503158233,
+        "emaShort": 1.2044730596350222,
+        "emaLong": 1.2139485289637215,
+        "r2": 0.6549779940055696,
         "volume": {
-          "recent": 965526.3070230001,
-          "base": 1581617.497004917,
-          "ratio": 0.6104676439476684,
+          "recent": 1378402.8317083332,
+          "base": 1530393.7753018334,
+          "ratio": 0.9006850746217105,
           "rising": false
         },
-        "summary": "Downtrend, moderate (R²=0.62), RSI 42, price below lower band, volume easing."
+        "summary": "Downtrend, moderate (R²=0.65), RSI 36, price below lower band, volume easing."
       },
       "patterns": [
         {
           "patternName": "Descending Triangle",
-          "confidence": 0.73,
-          "supportLevel": 1.203295465994962,
-          "resistanceLevel": 1.2093129032258068,
-          "bullishBias": 0.146,
-          "bearishBias": 0.73,
-          "invalidationLevel": 1.2093129032258068
+          "confidence": 0.68,
+          "supportLevel": 1.203053400503778,
+          "resistanceLevel": 1.2072981389578166,
+          "bullishBias": 0.136,
+          "bearishBias": 0.744,
+          "invalidationLevel": 1.2072981389578166
         }
       ],
       "series": [
-        {
-          "t": 1781514000000,
-          "o": 1.1804,
-          "h": 1.1868,
-          "l": 1.1784,
-          "c": 1.1845,
-          "v": 1752826.304039,
-          "p": 1.1845
-        },
         {
           "t": 1781517600000,
           "o": 1.1846,
@@ -1852,55 +1843,55 @@
           "t": 1781683200000,
           "o": 1.2083,
           "h": 1.2095,
-          "l": 1.2047,
-          "c": 1.2049,
-          "v": 292807.891212,
-          "p": 1.2049
+          "l": 1.194,
+          "c": 1.195,
+          "v": 1787293.519356,
+          "p": 1.195
+        },
+        {
+          "t": 1781686800000,
+          "o": 1.1949,
+          "h": 1.1983,
+          "l": 1.1933,
+          "c": 1.1956,
+          "v": 876178.46855,
+          "p": 1.1956
         }
       ]
     },
     "dogecoin": {
-      "price": 0.08666,
+      "price": 0.08587,
       "readout": {
-        "price": 0.08666,
-        "direction": "flat",
-        "cleanliness": "choppy",
-        "stretch": "mid-range",
-        "momentumPctPerStep": -0.055426792648951194,
-        "rsi": 40.53056076080416,
-        "pctB": 0.10424627434018315,
-        "emaShort": 0.08700326252956758,
-        "emaLong": 0.08729668382691179,
-        "r2": 0.298854838920535,
+        "price": 0.08587,
+        "direction": "down",
+        "cleanliness": "moderate",
+        "stretch": "overextended-down",
+        "momentumPctPerStep": -0.1387221948148427,
+        "rsi": 33.47296767869118,
+        "pctB": -0.09651534647247076,
+        "emaShort": 0.08652437121680086,
+        "emaLong": 0.08707854205111552,
+        "r2": 0.5150898412145595,
         "volume": {
-          "recent": 2267920.966666667,
-          "base": 2475662.5333333327,
-          "ratio": 0.9160864762989509,
-          "rising": false
+          "recent": 3791000.533333333,
+          "base": 2932608.4749999996,
+          "ratio": 1.2927059870592967,
+          "rising": true
         },
-        "summary": "No clear trend, choppy (R²=0.30), RSI 41, 10% across the band, volume easing."
+        "summary": "Downtrend, moderate (R²=0.52), RSI 33, price below lower band, volume rising."
       },
       "patterns": [
         {
           "patternName": "Descending Triangle",
-          "confidence": 0.687,
-          "supportLevel": 0.08676062730627318,
-          "resistanceLevel": 0.08710380189604443,
-          "bullishBias": 0.137,
-          "bearishBias": 0.75,
-          "invalidationLevel": 0.08710380189604443
+          "confidence": 0.623,
+          "supportLevel": 0.08677047970479718,
+          "resistanceLevel": 0.08702006864988561,
+          "bullishBias": 0.125,
+          "bearishBias": 0.698,
+          "invalidationLevel": 0.08702006864988561
         }
       ],
       "series": [
-        {
-          "t": 1781514000000,
-          "o": 0.08848,
-          "h": 0.08869,
-          "l": 0.08809,
-          "c": 0.08853,
-          "v": 2722014,
-          "p": 0.08853
-        },
         {
           "t": 1781517600000,
           "o": 0.08853,
@@ -2319,10 +2310,19 @@
           "t": 1781683200000,
           "o": 0.0868,
           "h": 0.08682,
-          "l": 0.08665,
-          "c": 0.08666,
-          "v": 417666,
-          "p": 0.08666
+          "l": 0.08567,
+          "c": 0.0859,
+          "v": 7619759,
+          "p": 0.0859
+        },
+        {
+          "t": 1781686800000,
+          "o": 0.0859,
+          "h": 0.08616,
+          "l": 0.08586,
+          "c": 0.08587,
+          "v": 1494229.9,
+          "p": 0.08587
         }
       ]
     }
