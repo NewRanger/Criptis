@@ -1,19 +1,19 @@
 {
   "coins": {
     "bitcoin": {
-      "lastStormAt": 1784445992629
+      "lastStormAt": 1784491113287
     },
     "ethereum": {
-      "lastStormAt": 1784445992629
+      "lastStormAt": 1784491113287
     },
     "solana": {
-      "lastStormAt": 1784445992629
+      "lastStormAt": 1784491113287
     },
     "ripple": {
-      "lastStormAt": 1784445992629
+      "lastStormAt": 1784491113287
     },
     "dogecoin": {
-      "lastStormAt": 1784445992629
+      "lastStormAt": 1784491113287
     }
   }
 }
