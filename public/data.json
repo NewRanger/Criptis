@@ -1,26 +1,26 @@
 {
-  "updatedAt": "2026-07-24T09:05:40.879Z",
+  "updatedAt": "2026-07-24T10:00:16.633Z",
   "coins": {
     "bitcoin": {
-      "price": 65266.2,
+      "price": 65055.71,
       "readout": {
-        "price": 65266.2,
-        "direction": "up",
-        "cleanliness": "moderate",
+        "price": 65055.71,
+        "direction": "flat",
+        "cleanliness": "choppy",
         "stretch": "mid-range",
-        "momentumPctPerStep": 0.05016038664257149,
-        "rsi": 49.75876044040639,
-        "pctB": 0.7031343471956996,
-        "emaShort": 65290.67591332998,
-        "emaLong": 65231.03956204947,
-        "r2": 0.47834208410933854,
+        "momentumPctPerStep": 0.03775624311758092,
+        "rsi": 44.236956595954055,
+        "pctB": 0.49437083274733573,
+        "emaShort": 65230.53591332998,
+        "emaLong": 65208.8827199442,
+        "r2": 0.25619151549850316,
         "volume": {
-          "recent": 115.38562615333332,
-          "base": 167.4174224825,
-          "ratio": 0.6892091900733598,
+          "recent": 175.66074312333333,
+          "base": 182.486201725,
+          "ratio": 0.9625973989422368,
           "rising": false
         },
-        "summary": "Uptrend, moderate (R²=0.48), RSI 50, 70% across the band, volume easing."
+        "summary": "No clear trend, choppy (R²=0.26), RSI 44, 49% across the band, volume easing."
       },
       "patterns": [],
       "series": [
@@ -450,34 +450,34 @@
         {
           "t": 1784883600000,
           "o": 65255.44,
-          "h": 65266.21,
-          "l": 65255.44,
-          "c": 65266.2,
-          "v": 0.55580839,
-          "p": 65266.2
+          "h": 65267.89,
+          "l": 64896.59,
+          "c": 65055.71,
+          "v": 181.3811593,
+          "p": 65055.71
         }
       ]
     },
     "ethereum": {
-      "price": 1887.73,
+      "price": 1885.95,
       "readout": {
-        "price": 1887.73,
+        "price": 1885.95,
         "direction": "flat",
         "cleanliness": "moderate",
         "stretch": "mid-range",
-        "momentumPctPerStep": 0.08034978558045265,
-        "rsi": 47.89806593204541,
-        "pctB": 0.7022135303383055,
-        "emaShort": 1885.4404299843059,
-        "emaLong": 1886.2532836789278,
-        "r2": 0.44310985257104707,
+        "momentumPctPerStep": 0.07671372238800704,
+        "rsi": 46.781109836428385,
+        "pctB": 0.6493641731812739,
+        "emaShort": 1884.9318585557346,
+        "emaLong": 1886.065915257875,
+        "r2": 0.4184091905996494,
         "volume": {
-          "recent": 2254.02757945,
-          "base": 2620.181513085,
-          "ratio": 0.8602562716336813,
-          "rising": false
+          "recent": 2911.7255186666666,
+          "base": 2784.6059978891667,
+          "ratio": 1.0456508105182065,
+          "rising": true
         },
-        "summary": "No clear trend, moderate (R²=0.44), RSI 48, 70% across the band, volume easing."
+        "summary": "No clear trend, moderate (R²=0.42), RSI 47, 65% across the band, volume rising."
       },
       "patterns": [],
       "series": [
@@ -908,33 +908,33 @@
           "t": 1784883600000,
           "o": 1886.83,
           "h": 1887.84,
-          "l": 1886.49,
-          "c": 1887.73,
-          "v": 25.94517093,
-          "p": 1887.73
+          "l": 1876.5,
+          "c": 1885.95,
+          "v": 1999.03898858,
+          "p": 1885.95
         }
       ]
     },
     "solana": {
-      "price": 75.72,
+      "price": 75.59,
       "readout": {
-        "price": 75.72,
+        "price": 75.59,
         "direction": "flat",
         "cleanliness": "choppy",
         "stretch": "mid-range",
-        "momentumPctPerStep": -0.01107559400564352,
-        "rsi": 40.590783813213456,
-        "pctB": 0.3689461706456671,
-        "emaShort": 75.76904865663766,
-        "emaLong": 75.97260027351732,
-        "r2": 0.02980444969394469,
+        "momentumPctPerStep": -0.017677329655507616,
+        "rsi": 38.6981747157108,
+        "pctB": 0.24340013133145438,
+        "emaShort": 75.7319057994948,
+        "emaLong": 75.95891606299101,
+        "r2": 0.07016556712172439,
         "volume": {
-          "recent": 10032.02292241,
-          "base": 11039.305222462499,
-          "ratio": 0.9087549189234386,
-          "rising": false
+          "recent": 13848.517029193334,
+          "base": 11993.428749158333,
+          "ratio": 1.1546753909023044,
+          "rising": true
         },
-        "summary": "No clear trend, choppy (R²=0.03), RSI 41, 37% across the band, volume easing."
+        "summary": "No clear trend, choppy (R²=0.07), RSI 39, 24% across the band, volume rising."
       },
       "patterns": [],
       "series": [
@@ -1364,34 +1364,34 @@
         {
           "t": 1784883600000,
           "o": 75.72,
-          "h": 75.74,
-          "l": 75.71,
-          "c": 75.72,
-          "v": 319.68689314,
-          "p": 75.72
+          "h": 75.78,
+          "l": 75.31,
+          "c": 75.59,
+          "v": 11769.16921349,
+          "p": 75.59
         }
       ]
     },
     "ripple": {
-      "price": 1.1116,
+      "price": 1.1085,
       "readout": {
-        "price": 1.1116,
+        "price": 1.1085,
         "direction": "flat",
         "cleanliness": "choppy",
         "stretch": "mid-range",
-        "momentumPctPerStep": 0.03586157432312101,
-        "rsi": 45.79228349421559,
-        "pctB": 0.7241030323034876,
-        "emaShort": 1.1110501977788931,
-        "emaLong": 1.112161266102032,
-        "r2": 0.28304324753881693,
+        "momentumPctPerStep": 0.0251215561285869,
+        "rsi": 42.45598839832723,
+        "pctB": 0.4915337886277688,
+        "emaShort": 1.110164483493179,
+        "emaLong": 1.1118349503125584,
+        "r2": 0.14594787844373736,
         "volume": {
-          "recent": 1020923.083523,
-          "base": 1070864.9962391665,
-          "ratio": 0.9533630169147741,
-          "rising": false
+          "recent": 1278509.7824593333,
+          "base": 1135261.67097325,
+          "ratio": 1.12618069925965,
+          "rising": true
         },
-        "summary": "No clear trend, choppy (R²=0.28), RSI 46, 72% across the band, volume easing."
+        "summary": "No clear trend, choppy (R²=0.15), RSI 42, 49% across the band, volume rising."
       },
       "patterns": [],
       "series": [
@@ -1822,33 +1822,33 @@
           "t": 1784883600000,
           "o": 1.1112,
           "h": 1.1116,
-          "l": 1.1108,
-          "c": 1.1116,
-          "v": 13475.277671,
-          "p": 1.1116
+          "l": 1.1073,
+          "c": 1.1085,
+          "v": 786235.37448,
+          "p": 1.1085
         }
       ]
     },
     "dogecoin": {
-      "price": 0.06992,
+      "price": 0.07,
       "readout": {
-        "price": 0.06992,
+        "price": 0.07,
         "direction": "flat",
         "cleanliness": "moderate",
         "stretch": "mid-range",
-        "momentumPctPerStep": 0.08654154691083996,
-        "rsi": 46.57493342932412,
-        "pctB": 0.8416944158173187,
-        "emaShort": 0.0696841961331898,
-        "emaLong": 0.06979199145077539,
-        "r2": 0.38388148739047034,
+        "momentumPctPerStep": 0.0909656716239971,
+        "rsi": 47.90393967375448,
+        "pctB": 0.8923992243922109,
+        "emaShort": 0.06970705327604694,
+        "emaLong": 0.06980041250340696,
+        "r2": 0.3983717779623731,
         "volume": {
-          "recent": 6554338.199999999,
-          "base": 4184961.591666667,
-          "ratio": 1.5661644811869646,
+          "recent": 6921504.566666666,
+          "base": 4276753.183333334,
+          "ratio": 1.6184016869713285,
           "rising": true
         },
-        "summary": "No clear trend, moderate (R²=0.38), RSI 47, 84% across the band, volume rising."
+        "summary": "No clear trend, moderate (R²=0.40), RSI 48, 89% across the band, volume rising."
       },
       "patterns": [],
       "series": [
@@ -2278,11 +2278,11 @@
         {
           "t": 1784883600000,
           "o": 0.06994,
-          "h": 0.06995,
-          "l": 0.06992,
-          "c": 0.06992,
-          "v": 347,
-          "p": 0.06992
+          "h": 0.07004,
+          "l": 0.06961,
+          "c": 0.07,
+          "v": 1101846.1,
+          "p": 0.07
         }
       ]
     }
