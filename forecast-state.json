@@ -1,7 +1,7 @@
 {
   "coins": {
     "bitcoin": {
-      "lastStormAt": 1785195502100
+      "lastStormAt": 1785241385365
     },
     "ethereum": {
       "lastStormAt": 1785223163475
@@ -13,7 +13,7 @@
       "lastStormAt": 1785233490769
     },
     "dogecoin": {
-      "lastStormAt": 1785195502100
+      "lastStormAt": 1785241385365
     }
   }
 }
