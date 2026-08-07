@@ -1,10 +1,10 @@
 {
   "coins": {
     "bitcoin": {
-      "lastStormAt": 1786014181746
+      "lastStormAt": 1786079915920
     },
     "ethereum": {
-      "lastStormAt": 1785935695672
+      "lastStormAt": 1786079915920
     },
     "solana": {
       "lastStormAt": 1785991632380
